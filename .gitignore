@@ -1,0 +1,31 @@
+#Any environment variables
+.env
+*.env
+env/
+venv/
+
+#Python
+__pycache__/
+
+#Data Files and Models
+data/features/*
+data/processed/*
+data/models/*
+data/raw/*
+
+#Keep data file structure
+!data/features/.gitkeep
+!data/processed/.gitkeep
+!data/models/.gitkeep
+!data/raw/.gitkeep
+
+#TODO REMOVE WHEN RELEVANT
+#Keep image file structure as folder initially empty
+!app/static/images/.gitkeep
+
+#Jupyter notebook checkpoints
+.ipynb_checkpoints
+
+#Any logs
+*.log
+logs/
