@@ -1,0 +1,2 @@
+# pip freeze > requirements.txt
+# command above generates requirements list
