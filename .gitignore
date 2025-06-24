@@ -19,13 +19,13 @@ data/raw/*
 !data/models/.gitkeep
 !data/raw/.gitkeep
 
-#TODO REMOVE WHEN RELEVANT
 #Keep image file structure as folder initially empty
 !app/static/images/.gitkeep
 
 #Jupyter notebook checkpoints
 .ipynb_checkpoints
 
-#Any logs
+# Any logs
 *.log
-logs/
+logs/*
+!logs/.gitkeep
