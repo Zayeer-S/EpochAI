@@ -1,0 +1,52 @@
+# Logger setup
+logging:
+  level: "INFO"
+  log_to_file: true
+  log_directory: "logs"
+
+# Default setup for collectors
+defaults:
+  wikipedia:
+    collection_years: [2023]
+    politicians: []
+    political_topics: []
+    political_events_template: ["{year} in politics"] ## This becomes e.g. "2023 in politics"
+
+    data_output:
+      directory: "data/raw"
+      default_type: "wikipedia_data"
+      separate_files_by_year: false
+
+    api:
+      language: ["en"]
+      rate_limit_delay: 2.0
+      max_retries: 3
+      search_max_results: 5
+      request_timeout: 30  
+
+# wikipedia_collector.py configuration
+wikipedia:
+  collection_years: [2023]
+
+  politicians:
+    - "Donald Trump Jr."
+    - "Sir Keir Starmer"
+
+  political_topics:
+    - "2024 United States presidential election"
+    - "United Kingdom general election 2024"
+
+  political_events_template:
+    - "{year} in politics" ## This becomes e.g. "2023 in politics"
+
+  data_output:
+    directory: "data/raw"
+    default_type: "wikipedia_all_political_data"
+    separate_files_by_year: false
+  
+  api:
+    language: ["en"]
+    rate_limit_delay: 0.5
+    max_retries: 5
+    search_max_results: 10
+    request_timeout: 10  
