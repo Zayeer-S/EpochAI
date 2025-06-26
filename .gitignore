@@ -29,3 +29,7 @@ data/raw/*
 *.log
 logs/*
 !logs/.gitkeep
+
+# IDE
+.idea/
+vscode/
