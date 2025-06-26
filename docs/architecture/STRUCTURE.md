@@ -42,11 +42,14 @@ PredictAI/
 │   ├── __init__.py     
 │   ├── common/                         # Shared utilities
 │   │   ├── __init__.py     
+│   │   ├── config_loader.py            # Loads config.yml and calls config_validator.py
+│   │   ├── config_validator.py         # Validates config and returns error messages if invalid
+│   │   ├── logging_config.py           # Creates a centralized logging for the projec
 │   │   ├── data_utils.py               # Shared data processing functions
 │   │   └── evaluation.py               # Model evaluation metrics
 │   ├── data_collection/                # Data collection modules
 │   │   ├── __init__.py     
-│   │   ├── news_collector.py           # News API data collection
+│   │   ├── wikipedia_collector.py       # Political data collections from Wikipedia API
 │   │   ├── social_collector.py         # Social media data collection
 │   │   └── market_collector.py         # Financial data collection
 │   ├── data_processing/                # Data processing modules
