@@ -1,10 +1,10 @@
 import wikipedia
 
 try:
-    from predictai.common.config_loader import get_test_pages_for_debug, get_wikipedia_collector_config
+    from predictai.common.config_loader import ConfigLoader
     
-    wiki_config = get_wikipedia_collector_config()
-    test_pages = get_test_pages_for_debug()
+    wiki_config = ConfigLoader.get_wikipedia_collector_config()
+    test_pages = ConfigLoader.get_test_pages_for_debug()
     
     print("=" * 30)
     print(f"LOADED CONFIGURATION FROM config.yml")
