@@ -21,7 +21,7 @@ class ConfigLoader:
             raise ValueError(f"Error in parsing config.yml: {e}")
         
     @staticmethod
-    def ovverride_default_config_values(defaults, overrides):
+    def override_default_config_values(defaults, overrides):
         """
         Recurisvely merges two dictionaries (default and specific) from config.yml
         Values in 'override' take precedent over 'defaults'
@@ -34,7 +34,7 @@ class ConfigLoader:
         
         for key, value in overrides.items():
             if key in result and isinstance(result[key], dict) and isinstance(value, dict):
-                result[key] = ConfigLoader.ovverride_default_config_values(result[key], value)
+                result[key] = ConfigLoader.override_default_config_values(result[key], value)
             else:
                 result[key] = value
                 
@@ -48,7 +48,7 @@ class ConfigLoader:
         defaults = config.get('defaults', {}).get('wikipedia', {})
         main_config = config.get('wikipedia', {})
         
-        merged_config = ConfigLoader.ovverride_default_config_values(defaults, main_config)
+        merged_config = ConfigLoader.override_default_config_values(defaults, main_config)
         
         ConfigValidator.validate_wikipedia_config(merged_config)
         
@@ -90,7 +90,7 @@ class ConfigLoader:
         
         defaults = config.get('defaults', {}).get('wikipedia', {})
         main_config = config.get('wikipedia', {})
-        merged_config = ConfigLoader.ovverride_default_config_values(defaults, main_config)
+        merged_config = ConfigLoader.override_default_config_values(defaults, main_config)
         
         events_template = merged_config.get('political_events_template', [])
         
