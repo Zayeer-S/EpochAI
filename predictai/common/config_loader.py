@@ -22,10 +22,7 @@ class ConfigLoader:
         
     @staticmethod
     def override_default_config_values(defaults, overrides):
-        """
-        Recurisvely merges two dictionaries (default and specific) from config.yml
-        Values in 'override' take precedent over 'defaults'
-        """
+        """Recursively merges two dictionaries (default and specific) from config.yml"""
         
         if not isinstance(defaults, dict) or not isinstance(overrides, dict):
             return overrides
