@@ -29,15 +29,29 @@ wikipedia:
   collection_years: [2023]
 
   politicians:
-    - "Donald Trump Jr."
-    - "Sir Keir Starmer"
+    en:
+      - "Donald Trump Jr."
+      - "Sir Keir Starmer"
+      - "Emmanuel Macron"
+
+    fr:
+      - "Emmanuel Macron"
 
   political_topics:
-    - "2024 United States presidential election"
-    - "United Kingdom general election 2024"
+    en:
+      - "2024 United States presidential election"
+      - "United Kingdom general election 2024"
+      - "2024 French legislative election"
+
+    fr:
+      - "Élections législatives françaises de 2024"
 
   political_events_template:
-    - "{year} in politics" ## This becomes e.g. "2023 in politics"
+    en:
+      - "{year} in politics"
+
+    fr:
+      - "{year} en politique"
 
   data_output:
     directory: "data/raw"
@@ -45,7 +59,7 @@ wikipedia:
     separate_files_by_year: false
   
   api:
-    language: ["en"]
+    language: ["en", "fr"]
     rate_limit_delay: 0.5
     max_retries: 5
     search_max_results: 10
