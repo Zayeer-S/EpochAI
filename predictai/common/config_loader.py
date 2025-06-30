@@ -72,25 +72,6 @@ class ConfigLoader:
         ConfigValidator.validate_logging_config(logging_config)
         
         return logging_config
-        
-    @staticmethod
-    def get_events_for_years(years):
-        """Get political events for non-default years"""
-        config = ConfigLoader.load_the_config()
-        
-        defaults = config.get('defaults', {}).get('wikipedia', {})
-        main_config = config.get('wikipedia', {})
-        merged_config = ConfigLoader.override_default_config_values(defaults, main_config)
-        
-        events_template = merged_config.get('political_events_template', [])
-        
-        political_events = []
-        
-        for year in years:
-            for template in events_template:
-                political_events.append(template.format(year=year))
-                
-        return political_events
     
     @staticmethod
     def get_test_pages_for_debug():
