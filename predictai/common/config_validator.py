@@ -11,8 +11,9 @@ class ConfigValidator:
             (['api', 'max_retries'], int),
             (['api', 'search_max_results'], int),
             (['collection_years'], list),
-            (['politicians'], list),
-            (['political_topics'], list),
+            (['politicians'], dict),
+            (['political_topics'], dict),
+            (['political_events_template'], dict),
             (['data_output', 'directory'], str),
             (['data_output', 'default_type'], str)
         ]
