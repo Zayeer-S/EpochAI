@@ -57,14 +57,7 @@ class ConfigLoader:
             for template in events_template:    
                 political_events.append(template.format(year=year))
         
-        return {
-            'collection_years' : years,
-            'politicians' : merged_config.get('politicians', []),
-            'political_topics' : merged_config.get('political_topics', []),
-            'political_events' : political_events,
-            'data_output' : merged_config.get('data_output', {}),
-            'api' : merged_config.get('api', {})
-        }
+        return merged_config
         
     @staticmethod
     def get_logging_config():
