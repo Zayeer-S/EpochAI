@@ -29,8 +29,8 @@ class WikipediaPoliticalCollector:
     # TODO Decide if theres a better name for this or not, because it doesn't collect rather changes the language and calls a collector
     def _collect_from_wikipedia_all_languages(
         self, 
-        items: List[str], 
-        collection_type: str, 
+        items_by_language: Dict[str, List[str]], 
+        collection_type: str,
         extra_data_func: Optional[Callable[[str], Dict[str, Any]]] = None
         ) -> list[dict[str, Any]]:
         """Changes the language of the data that is being collected from Wikipedia.
@@ -39,20 +39,24 @@ class WikipediaPoliticalCollector:
             Calls _collect_from_wikipedia_current_language to actually collect the data.
         """
         
-        self.logger.info(f"Collecting {collection_type} for {len(items)} items across {len(self.languages)} languages")
+        self.logger.info(f"Collecting {collection_type} for {len(items_by_language)} items across {len(self.languages)} languages")
         
         all_collected_data = []
         
-        for language in self.languages:
+        for language_code, items in items_by_language.items():
+            if not items:
+                self.logger.info(f"No items to collect for '{language_code}', skipping this language...")
+                continue
+            
             try:
-                wikipedia.set_lang(language)
+                wikipedia.set_lang(language_code)
                                 
-                self.logger.info(f"Collecting {collection_type} in language '{language}' for {len(items)} items")
+                self.logger.info(f"Collecting {collection_type} in language '{language_code}' for {len(items)} items")
                 
                 lang_data = self._collect_from_wikipedia_current_language(
                     items,
                     collection_type,
-                    language,
+                    language_code,
                     extra_data_func
                 )
                 
@@ -112,14 +116,16 @@ class WikipediaPoliticalCollector:
         if years is None:
             years = self.config['collection_years']
             
-        events_to_collect = []
+        events_to_collect = {}
         
         templates = self.config["political_events_template"]
         
-        for year in years:
-            for template in templates:
-                events_to_collect.append(template.format(year=year))
-            
+        for language, template_list in templates.items():
+            events_to_collect[language] = []
+            for year in years:
+                for template in template_list:
+                    events_to_collect[language].append(template.format(year=year))    
+                
         self.logger.info(f"Collecting political events for years: {years}")
         
         def add_year_data(event_title):
