@@ -67,15 +67,7 @@ class ConfigLoader:
         merged_config = ConfigLoader.override_default_config_values(defaults, main_config)
         
         ConfigValidator.validate_wikipedia_config(merged_config)
-        
-        years = merged_config.get('collection_years', [])
-        events_template = merged_config.get('political_events_template', [])
-        
-        political_events = []
-        for year in years:
-            for template in events_template:    
-                political_events.append(template.format(year=year))
-        
+
         return merged_config
         
     @staticmethod
