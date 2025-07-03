@@ -62,6 +62,8 @@ class ConfigValidator:
             except KeyError:
                 raise ValueError(f"Missing required config: {'.'.join(path)}")
             
+        ConfigValidator._validate_utf8_content(config)
+            
     @staticmethod
     def validate_logging_config(config):
         """Validate logging configuration"""
@@ -99,6 +101,26 @@ class ConfigValidator:
                 raise ValueError (
                     f"Invalid language code: '{language}'. Must be one of: {sorted(ConfigValidator.VALID_ISO_LANGUAGE_CODES)}"
                 )
+                
+    @staticmethod
+    def _validate_utf8_content(config, path=''):
+        """Recursively validates UTF-8 content in the config"""
+        if isinstance(config, dict):
+            for key, value in config.items():
+                current_path = f"{path}.{key}" if path else key
+                
+                if isinstance(key, str):
+                    ConfigValidator._check_string_for_corruption(key, f"config key '{current_path}'")
+                    
+                ConfigValidator._validate_utf8_content(value, current_path)
+                
+        elif isinstance(config, list):
+            for i, item in enumerate(config):
+                current_path = f"{path}[{i}]"
+                ConfigValidator._validate_utf8_content(item, current_path)
+                
+        elif isinstance(config, str):
+            ConfigValidator._check_string_for_corruption(config, f"config value '{path}'")
             
     @staticmethod
     def _check_string_for_corruption(text, context="string"):
