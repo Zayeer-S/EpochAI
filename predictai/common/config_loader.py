@@ -1,7 +1,19 @@
 import os
+import sys
 import yaml
 
 from predictai.common.config_validator import ConfigValidator
+
+if sys.version_info >= (3, 0):
+    import locale
+    
+    try:
+        locale.setlocale(locale.LC_ALL, 'en_US.UTF-8')
+    except locale.Error:
+        try:
+            locale.setlocale(locale.LC_ALL, 'C.UTF-8')
+        except locale.Error:
+            pass
 
 class ConfigLoader:
     @staticmethod
@@ -12,14 +24,21 @@ class ConfigLoader:
         config_path = os.path.join(project_root, 'config.yml')
         
         try:
-            with open(config_path, 'r') as file:
+            with open(config_path, 'r', encoding='utf-8') as file:
                 config = yaml.safe_load(file)
+            if config is None:
+                raise ValueError(f"Config file kinda sus yo: {config}")
             return config
+        
         except FileNotFoundError:
             raise FileNotFoundError((f"Config file not found at location: {config_path}"))
+        
         except yaml.YAMLError as e:
             raise ValueError(f"Error in parsing config.yml: {e}")
         
+        except UnicodeDecodeError as e:
+            raise ValueError(f"UTF-8 encoding error in {config_path}: {e}")
+
     @staticmethod
     def override_default_config_values(defaults, overrides):
         """Recursively merges two dictionaries (default and specific) from config.yml"""
