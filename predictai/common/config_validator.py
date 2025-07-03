@@ -1,6 +1,18 @@
 class ConfigValidator:
     """Validates configuration for all modules"""
     
+    VALID_ISO_LANGUAGE_CODES = {
+        'en', 'fr', 'de', 'ru', 'it', 'pt', 'pl', 'nl', 'sr', 'ro', # European
+        
+        'ar', 'tr', 'fa', 'he', # MENA
+        
+        'ur', 'bn', 'hi', # South asian
+        
+        'zh', 'ko', 'ja', # East asian
+        
+        'id', 'vi' # SEA
+    }
+    
     CORRUPTION_PATTERNS = [
         'Ã©', 'Ã¨', 'Ã ', 'Ã¡', 'Ã¢', 'Ã¤', 'Ã§', 'Ã¯', 'Ã´', 'Ã¹', 'Ã»', 'Ã¼',
         'â€™', 'â€œ', 'â€', 'â€¢', 'â€"', 'â€"', 'Â', 'Ž', 'â€ž', 'â€º'
@@ -45,11 +57,7 @@ class ConfigValidator:
                     raise ValueError("collection_years cannot be empty")
                 
                 if path == ['api', 'language']:
-                    if not isinstance(value, list) or len(value) == 0:
-                        raise ValueError("language must be a non-empty list")
-                    for lang in value:
-                        if not isinstance(lang, str):
-                            raise ValueError("All language codes must be strings")
+                    ConfigValidator._validate_language_codes(value)
              
             except KeyError:
                 raise ValueError(f"Missing required config: {'.'.join(path)}")
@@ -74,6 +82,23 @@ class ConfigValidator:
         
         ConfigValidator._check_string_for_corruption(level, "log level")
         ConfigValidator._check_string_for_corruption(log_dir, "log directory")
+        
+    @staticmethod
+    def _validate_language_codes(language_list):
+        """Validates language codes in config are valid/accepted ISO codes and are properly formatted"""
+        if not isinstance(language_list, list) or len(language_list) == 0:
+            raise ValueError("Language must be a non-empty list")
+        
+        for language in language_list:
+            if not isinstance(language, str):
+                raise ValueError(f"Language codes must be a string, got {type(language).__name__}: {language}")
+            
+            ConfigValidator._check_string_for_corruption(language, f"Language code: '{language}'")
+            
+            if language.lower() not in ConfigValidator.VALID_ISO_LANGUAGE_CODES:
+                raise ValueError (
+                    f"Invalid language code: '{language}'. Must be one of: {sorted(ConfigValidator.VALID_ISO_LANGUAGE_CODES)}"
+                )
             
     @staticmethod
     def _check_string_for_corruption(text, context="string"):
