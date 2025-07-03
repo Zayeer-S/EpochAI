@@ -1,6 +1,11 @@
 class ConfigValidator:
     """Validates configuration for all modules"""
     
+    CORRUPTION_PATTERNS = [
+        'Ã©', 'Ã¨', 'Ã ', 'Ã¡', 'Ã¢', 'Ã¤', 'Ã§', 'Ã¯', 'Ã´', 'Ã¹', 'Ã»', 'Ã¼',
+        'â€™', 'â€œ', 'â€', 'â€¢', 'â€"', 'â€"', 'Â', 'Ž', 'â€ž', 'â€º'
+    ]
+    
     @staticmethod
     def validate_wikipedia_config(config):
         """Validates only wikipedia collector configuration"""
@@ -66,3 +71,23 @@ class ConfigValidator:
         log_dir = config.get('log_directory', 'logs')
         if not isinstance(log_dir, str):
             raise ValueError("log_to_directory must be a string")
+        
+        ConfigValidator._check_string_for_corruption(level, "log level")
+        ConfigValidator._check_string_for_corruption(log_dir, "log directory")
+            
+    @staticmethod
+    def _check_string_for_corruption(text, context="string"):
+        """Checks for common UTF-8 corruption patterns"""
+        if not isinstance(text, str):
+            raise ValueError(f"{context} must be a string but got type: {type(text).__name__}: {text}")
+        
+        for pattern in ConfigValidator.CORRUPTION_PATTERNS:
+            if pattern in text:
+                raise ValueError(
+                    f"UTF-8 corruption pattern detected in {context}: '{text}' containts '{pattern}'"
+                )
+                
+        try:
+            text.encode('utf-8').decode('utf-8')
+        except UnicodeError as e:
+            raise ValueError(f"Unicode error in {context}: '{text}' - {e}")
