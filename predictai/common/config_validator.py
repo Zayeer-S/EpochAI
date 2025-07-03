@@ -20,7 +20,7 @@ class ConfigValidator:
     
     @staticmethod
     def validate_wikipedia_config(config):
-        """Validates only wikipedia collector configuration"""
+        """Validates only wikipedia collector configuration by checking for API settings and checks for any UTF-8 corruption"""
         
         required_paths = [
             (['api', 'language'], list),
