@@ -12,10 +12,9 @@ try:
 except ImportError:
     print("ERROR: Could not import config_loader.py. Aborting script.")
     exit(1)
-
-try:
-    wiki_config = all_collector_configs.get('wikipedia')
-except Exception as e:
+    
+wiki_config = all_collector_configs.get('wikipedia')
+if not wiki_config:
     print("ERROR: NO WIKIPEDIA CONFIGURATION FOUND.")
     exit(1)
     
@@ -27,7 +26,7 @@ for language, politician_list in wiki_config['politicians'].items():
 for language, topic_list in wiki_config['political_topics'].items():
     test_pages.extend(topic_list)
     
-for language, template_list in wiki_config['political_events_template'].items(0):
+for language, template_list in wiki_config['political_events_template'].items():
     for year in wiki_config['collection_years']:
         for template in template_list:
             test_pages.append(template.format(year=year))
