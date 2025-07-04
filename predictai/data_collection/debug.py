@@ -68,12 +68,20 @@ for page_title in test_pages:
         
 print("\n" + "=" * 30)
 
-# Print Config Summary    
-if wiki_config:
-    print("CONFIGURATION SUMMARY")
-    print(f"\tLanguages: {wiki_config['api']['language']}")
-    print(f"\tPoliticians: {wiki_config['politicians']}")
-    print(f"\tTopics: {wiki_config['political_topics']}")
-    print(f"\tEvents: {wiki_config['political_events']}")
-else:
-    print("Create config.yml with wikipedia section to manage all page titles!")
+print("CONFIGURATION SUMMARY")
+for collector_name, config in all_collector_configs.items():
+    if config:
+        print(f"{collector_name.upper()} COLLECTOR:")
+        if collector_name == 'wikipedia':
+            print(f"\tLanguages: {wiki_config['api']['language']}")
+            print(f"\tPoliticians: {wiki_config['politicians']}")
+            print(f"\tTopics: {wiki_config['political_topics']}")
+            
+            formatted_events = []
+            for language, template_list in config['political_events_template'].items():
+                for year in config['collection_years']:
+                    for template in template_list:
+                        formatted_events.append(template.format(year=year))
+            print(f"\tEvents: {formatted_events}")
+    else:
+        print(f"{collector_name.upper()} COLLECTOR: Not configured")
