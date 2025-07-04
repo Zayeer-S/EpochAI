@@ -3,17 +3,35 @@ import wikipedia
 try:
     from predictai.common.config_loader import ConfigLoader
     
-    wiki_config = ConfigLoader.get_wikipedia_collector_config()
-    test_pages = ConfigLoader.get_test_pages_for_debug()
-    
+    all_collector_configs = ConfigLoader.get_all_collector_configs()
+     
     print("=" * 30)
-    print(f"LOADED CONFIGURATION FROM config.yml")
+    print("LOADED CONFIGURATION FROM config.yml")
     print("=" * 30)
     
 except ImportError:
     print("ERROR: Could not import config_loader.py. Aborting script.")
     exit(1)
+
+try:
+    wiki_config = all_collector_configs.get('wikipedia')
+except Exception as e:
+    print("ERROR: NO WIKIPEDIA CONFIGURATION FOUND.")
+    exit(1)
     
+test_pages = []
+
+for language, politician_list in wiki_config['politicians'].items():
+    test_pages.extend(politician_list)
+    
+for language, topic_list in wiki_config['political_topics'].items():
+    test_pages.extend(topic_list)
+    
+for language, template_list in wiki_config['political_events_template'].items(0):
+    for year in wiki_config['collection_years']:
+        for template in template_list:
+            test_pages.append(template.format(year=year))
+
 print(f"=== TESTING WIKIPEDIA PAGE ACCESS ===")
 print(f"Testing {len(test_pages)} pages from configuration")
 
