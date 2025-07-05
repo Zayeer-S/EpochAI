@@ -85,9 +85,15 @@ class ConfigLoader:
         return logging_config
     
     @staticmethod
-    def get_test_pages_for_debug():
-        """Get all pages for testing in the debug script"""
-        wikipedia_config = ConfigLoader.get_wikipedia_collector_config()
-        return (wikipedia_config['politicians'] + 
-                wikipedia_config['political_topics'] + 
-                wikipedia_config['political_events'])
+    def get_all_collector_configs():
+        """Gets all collector configs"""
+        
+        all_configs = {}
+        
+        try:
+            all_configs['wikipedia'] = ConfigLoader.get_wikipedia_collector_config()
+        except Exception as e:
+            print(f"Could not load wikipedia collector: '{e}'")
+            all_configs['wikipedia'] = None
+            
+        return all_configs

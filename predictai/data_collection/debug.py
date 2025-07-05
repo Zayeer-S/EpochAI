@@ -3,17 +3,34 @@ import wikipedia
 try:
     from predictai.common.config_loader import ConfigLoader
     
-    wiki_config = ConfigLoader.get_wikipedia_collector_config()
-    test_pages = ConfigLoader.get_test_pages_for_debug()
-    
+    all_collector_configs = ConfigLoader.get_all_collector_configs()
+     
     print("=" * 30)
-    print(f"LOADED CONFIGURATION FROM config.yml")
+    print("LOADED CONFIGURATION FROM config.yml")
     print("=" * 30)
     
 except ImportError:
     print("ERROR: Could not import config_loader.py. Aborting script.")
     exit(1)
     
+wiki_config = all_collector_configs.get('wikipedia')
+if not wiki_config:
+    print("ERROR: NO WIKIPEDIA CONFIGURATION FOUND.")
+    exit(1)
+    
+test_pages = []
+
+for language, politician_list in wiki_config['politicians'].items():
+    test_pages.extend(politician_list)
+    
+for language, topic_list in wiki_config['political_topics'].items():
+    test_pages.extend(topic_list)
+    
+for language, template_list in wiki_config['political_events_template'].items():
+    for year in wiki_config['collection_years']:
+        for template in template_list:
+            test_pages.append(template.format(year=year))
+
 print(f"=== TESTING WIKIPEDIA PAGE ACCESS ===")
 print(f"Testing {len(test_pages)} pages from configuration")
 
@@ -50,12 +67,20 @@ for page_title in test_pages:
         
 print("\n" + "=" * 30)
 
-# Print Config Summary    
-if wiki_config:
-    print("CONFIGURATION SUMMARY")
-    print(f"\tLanguages: {wiki_config['api']['language']}")
-    print(f"\tPoliticians: {wiki_config['politicians']}")
-    print(f"\tTopics: {wiki_config['political_topics']}")
-    print(f"\tEvents: {wiki_config['political_events']}")
-else:
-    print("Create config.yml with wikipedia section to manage all page titles!")
+print("CONFIGURATION SUMMARY")
+for collector_name, config in all_collector_configs.items():
+    if config:
+        print(f"{collector_name.upper()} COLLECTOR:")
+        if collector_name == 'wikipedia':
+            print(f"\tLanguages: {wiki_config['api']['language']}")
+            print(f"\tPoliticians: {wiki_config['politicians']}")
+            print(f"\tTopics: {wiki_config['political_topics']}")
+            
+            formatted_events = []
+            for language, template_list in config['political_events_template'].items():
+                for year in config['collection_years']:
+                    for template in template_list:
+                        formatted_events.append(template.format(year=year))
+            print(f"\tEvents: {formatted_events}")
+    else:
+        print(f"{collector_name.upper()} COLLECTOR: Not configured")
