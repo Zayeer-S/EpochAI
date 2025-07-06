@@ -40,7 +40,7 @@ def process_items_by_language(
     ) -> Dict[str, List[Any]]:
     """
     Processes items by language and switches language via helper function.
-    Uses process_func to call a relveant function.
+    Uses process_func to call a relevant function.
     
     Args:
         process_func: Function that is called for each item. Must accept 2 parameters:
