@@ -1,3 +1,6 @@
+import time
+from typing import Any, Dict, List
+
 import wikipedia
 
 from predictai.common.logging_config import get_logger
@@ -29,3 +32,48 @@ def switch_language(
     except Exception as e:
         self.logger.error(f"Error switching to language: {language_code} - {e}")
         return False
+    
+def process_items_by_language(
+    self, 
+    items_by_language_code: Dict[str, List[str]], 
+    process_func: callable
+    ) -> Dict[str, List[Any]]:
+    """
+    Processes items by language and switches language via helper function.
+    Uses process_func to call a relveant function.
+    
+    Args:
+        process_func: Function that is called for each item. Must accept 2 parameters:
+            (item: str, language_code: str) and returns result or None
+    
+    Returns:
+        Dict mapping language codes to a list e.g. 'language_code': [item1, item2, etc]
+    """
+    
+    results_by_language = {}
+    
+    for language_code, items in items_by_language_code.items():
+        if not items:
+            self.logger.warning(f"No items for this language '{language_code}', skipping this language...")
+            continue
+        
+        if not self.switch_language(language_code):
+            results_by_language[language_code] = []
+            continue
+        
+        results_by_language[language_code] = []
+        
+        for item in items:
+            try:
+                result = process_func(item, language_code)
+                if result:
+                    results_by_language[language_code].append(result)
+                    
+                time.sleep(self.config['api']['rate_limit_delay'])
+                
+            except Exception as e:
+                self.logger.error(f"Error processing '{item} in '{language_code}': {e}")
+                continue
+            
+    return results_by_language
+            
