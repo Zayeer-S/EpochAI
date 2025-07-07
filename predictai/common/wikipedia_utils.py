@@ -1,5 +1,5 @@
 import time
-from typing import Any, Dict, List
+from typing import Any, Callable, Dict, List
 
 import wikipedia
 
@@ -36,7 +36,7 @@ def switch_language(
 def process_items_by_language(
     self, 
     items_by_language_code: Dict[str, List[str]], 
-    process_func: callable
+    process_func: Callable
     ) -> Dict[str, List[Any]]:
     """
     Processes items by language and switches language via helper function.
@@ -47,7 +47,9 @@ def process_items_by_language(
             (item: str, language_code: str) and returns result or None
     
     Returns:
-        Dict mapping language codes to a list e.g. 'language_code': [item1, item2, etc]
+        Dict mapping language codes to a nullable list 
+        e.g.'language_code': [item1, item2, etc]
+            'language_code': [null]
     """
     
     results_by_language = {}
@@ -76,4 +78,4 @@ def process_items_by_language(
                 continue
             
     return results_by_language
-            
+
