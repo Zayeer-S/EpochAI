@@ -169,7 +169,7 @@ class WikipediaUtils:
         except wikipedia.exceptions.DisambiguationError as e:
             return self.handle_any_disambiguation_error(page_title, e.options, language_code)
         
-        except wikipedia.PageError as e2:
+        except wikipedia.exceptions.PageError as e2:
             self.logger.warning(f"Page not found: '{page_title}' in '{language_code}' - {e2}")
             search_results = self.search_using_config(page_title, language_code)
             if search_results:
