@@ -37,7 +37,7 @@ class WikipediaUtils:
         
         try:
             search_results = wikipedia.search(query, results=search_max_results)
-            self.logger.info(f"Found {len(search_results)}")
+            self.logger.info(f"Found {len(search_results)} for '{query}'")
             return search_results
         except Exception as e:
             self.logger.error(f"Search error for '{query}' in '{language_code}': {e}")
@@ -122,9 +122,9 @@ class WikipediaUtils:
         
         for option in (options[:max_retries]):
             try:
-                self.logger.info(f"Trying option: '{option}")
+                self.logger.info(f"Trying option: '{option}'")
                 page = wikipedia.page(option)
-                self.logger.info(f"Successfully resolved to: '{page_title}'")
+                self.logger.info(f"Successfully resolved to: '{page.title}'")
                 return page
             
             except wikipedia.exceptions.DisambiguationError as e:
