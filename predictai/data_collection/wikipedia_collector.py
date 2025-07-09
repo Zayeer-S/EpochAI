@@ -214,7 +214,6 @@ class WikipediaPoliticalCollector:
         previous_year_wiki_data = self.collect_political_events_for_years()
         
         self.logger.info("2. Collecting politician data...")
-
         politician_wiki_data = self.collect_politician_pages()
         
         self.logger.info("3. Collecting political topic data...")
