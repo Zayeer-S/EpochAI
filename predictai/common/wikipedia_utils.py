@@ -37,8 +37,14 @@ class WikipediaUtils:
         
         try:
             search_results = wikipedia.search(query, results=search_max_results)
-            self.logger.info(f"Found {len(search_results)} for '{query}'")
-            return search_results
+            
+            if search_results:
+                self.logger.info(f"Found {len(search_results)} for '{query}'")
+                return search_results
+            else:
+                self.logger.warning(f"No results found for '{query}' in '{language_code}'")
+                return []
+            
         except Exception as e:
             self.logger.error(f"Search error for '{query}' in '{language_code}': {e}")
             return []
