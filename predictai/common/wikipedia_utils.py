@@ -30,10 +30,10 @@ class WikipediaUtils:
         """
         
         search_max_results = self.config['api']['search_max_results']
+        
+        self.switch_language(language_code)
             
         self.logger.info(f"Searching for '{query}' in language '{language_code}' (max results: {search_max_results})")
-        
-        wikipedia.set_lang(language_code)
         
         try:
             search_results = wikipedia.search(query, results=search_max_results)
@@ -156,6 +156,10 @@ class WikipediaUtils:
             Optional[wikipedia.WikipediaPage]: Wikipedia page object if successcful or none if fail
         """
         
+        if not self.switch_language(language_code):
+            self.logger.error(f"Cannot get '{page_title}' due to failure to change to '{language_code}'")
+            return None
+        
         if recursive_limit == None:
             recursive_limit = self.config['api']['recursive_limit']
         elif recursive_limit <= 0:
@@ -185,7 +189,7 @@ class WikipediaUtils:
         self,
         page_title: str,
         language_code: str,
-        extra_data: Optional[Dict[str, Any]],
+        extra_data: Optional[Dict[str, Any]] = None,
     ) -> Optional[Dict[str, Any]]:
         """
         Attempts to get meta data via helper funciton and returns that meta data
@@ -202,8 +206,6 @@ class WikipediaUtils:
         
         for attempt in range(max_retries):
             try:
-                self.switch_language(language_code)
-                
                 page = self.get_wikipedia_page(page_title, language_code)
                 
                 if page is None:
