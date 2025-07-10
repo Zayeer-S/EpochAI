@@ -17,6 +17,8 @@ class WikipediaUtils:
         self.config = config
         self.logger = get_logger(__name__)
         
+        self.current_language = None
+        
     def search_using_config(
         self,
         query: str,
@@ -39,7 +41,7 @@ class WikipediaUtils:
             search_results = wikipedia.search(query, results=search_max_results)
             
             if search_results:
-                self.logger.info(f"Found {len(search_results)} for '{query}'")
+                self.logger.info(f"Found {len(search_results)} search results for '{query}': {search_results}")
                 return search_results
             else:
                 self.logger.warning(f"No results found for '{query}' in '{language_code}'")
@@ -56,11 +58,15 @@ class WikipediaUtils:
         """
         Switches language for Wikipedia API. True if successful switch and vice versa.
         """
-        
         try: 
-            wikipedia.set_lang(language_code)
-            self.logger.info(f"Language successfully switched to '{language_code}'")
-            return True
+            if self.current_language == language_code:
+                return True
+            else:
+                wikipedia.set_lang(language_code)
+                self.logger.info(f"Language successfully switched to '{language_code}'")
+                self.current_language = language_code
+                
+                return True
         
         except Exception as e:
             self.logger.error(f"Error switching to language: {language_code} - {e}")
