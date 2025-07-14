@@ -1,13 +1,12 @@
 import os
-import time
 from datetime import datetime
 from typing import Optional, List, Dict, Any, Callable
 
 import pandas as pd
-import wikipedia
 
 from predictai.common.config_loader import ConfigLoader
 from predictai.common.logging_config import setup_logging, get_logger
+from predictai.common.wikipedia_utils import WikipediaUtils
 
 class WikipediaPoliticalCollector:
     def __init__(self):
@@ -26,90 +25,55 @@ class WikipediaPoliticalCollector:
         self.languages = self.config['api']['language']
         self.collected_data = []
         
-    # TODO Decide if theres a better name for this or not, because it doesn't collect rather changes the language and calls a collector
-    def _collect_from_wikipedia_all_languages(
-        self, 
-        items_by_language: Dict[str, List[str]], 
+        self.wiki_utils = WikipediaUtils(self.config)
+        
+    def _handle_all_wikipedia_collection(
+        self,
+        items_by_language: Dict[str, List[str]],
         collection_type: str,
-        extra_data_func: Optional[Callable[[str], Dict[str, Any]]] = None
-        ) -> list[dict[str, Any]]:
-        """Changes the language of the data that is being collected from Wikipedia.
-
-        Note:
-            Calls _collect_from_wikipedia_current_language to actually collect the data.
-        """
+        extra_data_func: Optional[Callable[[str], Dict[str, Any]]]
+        ) -> List[Dict[str, Any]]:
+        """"""
+        
+        if not items_by_language:
+            self.logger(f"No items provided for {collection_type}")
+            return []
         
         self.logger.info(f"Collecting {collection_type} for {len(items_by_language)} items across {len(self.languages)} languages")
         
+        def collect_single_page_data(
+            item: str,
+            language_code: str
+        ) -> Optional[Dict[str, Any]]:
+            """"""
+            self.logger.info(f"Collecting ({language_code}): {item}")
+            
+            if extra_data_func:
+                extra_data = extra_data_func(item)
+            else:
+                extra_data = None
+            
+            page = self.wiki_utils.get_wikipedia_metadata(item, language_code, extra_data)
+            
+            if page:
+                self.logger.debug(f"Successfully collected ({language_code}): {item}")
+            else:
+                self.logger.warning(f"Nothing collected for ({language_code}): {item}")
+                
+            return page
+        
+        results_by_language = self.wiki_utils.process_items_by_language(
+            items_by_language,
+            collect_single_page_data
+        )
+        
         all_collected_data = []
-        
-        for language_code, items in items_by_language.items():
-            if not items:
-                self.logger.info(f"No items to collect for '{language_code}', skipping this language...")
-                continue
-            
-            try:
-                wikipedia.set_lang(language_code)
-                                
-                self.logger.info(f"Collecting {collection_type} in language '{language_code}' for {len(items)} items")
+        for language_code, results in results_by_language.items():
+            if results:
+                all_collected_data.extend(results)
                 
-                lang_data = self._collect_from_wikipedia_current_language(
-                    items,
-                    collection_type,
-                    language_code,
-                    extra_data_func
-                )
-                
-                all_collected_data.extend(lang_data)
-                
-            except Exception as e:
-                self.logger.error(f"Error setting language: {e}")
-                continue
-
         return all_collected_data
-        
-    def _collect_from_wikipedia_current_language(
-        self, 
-        items: List[str], 
-        collection_type: str, 
-        language: str, 
-        extra_data_func: Optional[Callable[[str], Dict[str, Any]]]=None
-        ) -> list[dict[str, Any]]:
-        """Collects data for a single language.
-        
-        Note:
-            This single language is determined by _collect_from_wikipedia_all_languages.
-        """
-        
-        self.logger.info(f"Collecting {collection_type} for {len(items)} items")
-        
-        rate_limit_delay = self.config['api']['rate_limit_delay']
-        
-        collected_data = []
-        
-        for item in items:
-            try:
-                self.logger.info(f"Collecting ({language}): {item}")
-                page_data = self._get_wikipedia_page_meta_data(item, language)
-                
-                if page_data:
-                    if extra_data_func:
-                        extra_data = extra_data_func(item)
-                        page_data.update(extra_data)
-                    
-                    collected_data.append(page_data)
-                    self.logger.debug(f"Successfully collected ({language}): {item}")
-                else:
-                    self.logger.warning(f"Nothing collected for ({language}): {item}")
-                    
-                time.sleep(rate_limit_delay)
-                
-            except Exception as e:
-                self.logger.error(f"Error collecting from language: ({language}) in item: {item} with error: {e}")
-                continue
-            
-        self.logger.info(f"Collected {len(collected_data)} items in {language}")
-        return collected_data
+    
         
     def collect_political_events_for_years(self, years=None):
         """Collect yearly political event summaries from Wikipedia (e.g. "2023 in Politics" Page)."""
@@ -128,7 +92,7 @@ class WikipediaPoliticalCollector:
                 
         self.logger.info(f"Collecting political events for years: {years}")
         
-        def add_year_data(event_title):
+        def extract_year_from_title(event_title):
             """
             Extract year from the political events' title (e.g. get 2023 from "2023 in Politics") and attachess it as metadata.
             """
@@ -137,123 +101,68 @@ class WikipediaPoliticalCollector:
                     return{'event_year': year_val}
             return {'event_year': 'unknown'}
         
-        return self._collect_from_wikipedia_all_languages(
+        return self._handle_all_wikipedia_collection(
             events_to_collect,
             "political_events",
-            extra_data_func=add_year_data
+            extra_data_func=extract_year_from_title
         )
     
     def collect_politician_pages(self):
         """Collects specific politician pages from wikipedia."""
-        def add_politician_data(politician_name):
+        def add_politician_metadata(politician_name):
             return{'politician_name': politician_name}
         
-        return self._collect_from_wikipedia_all_languages(
+        return self._handle_all_wikipedia_collection(
             self.config['politicians'],
             "politicians_data",
-            extra_data_func=add_politician_data
+            extra_data_func=add_politician_metadata
         )
         
     def collect_political_topics(self):
         """Collect wiki pages for specific political topics"""
-        def add_topic_data(topic_name):
+        def add_topic_metadata(topic_name):
             return {'topic_name': topic_name}
         
-        return self._collect_from_wikipedia_all_languages(
+        return self._handle_all_wikipedia_collection(
             self.config['political_topics'],
             "political topics",
-            extra_data_func=add_topic_data
+            extra_data_func=add_topic_metadata
         )
         
-    def _get_wikipedia_page_meta_data(self, page_title, language):
-        """Gets Wikipedia page content and meta data"""
-        
-        max_retries = self.config['api']['max_retries']
-        rate_limit_delay = self.config['api']['rate_limit_delay']
-        
-        for attempt in range(max_retries):
-            try:
-                page = wikipedia.page(page_title)
-                
-                page_data = {
-                    'title': page.title,
-                    'summary': page.summary,
-                    'content': page.content,
-                    'url': page.url,
-                    'categories': list(page.categories) if hasattr(page, 'categories') else [],
-                    'links': list(page.links) if hasattr(page, 'links') else [],
-                    'collected_at': datetime.now().isoformat(),
-                    'source': f'wikipedia_{language}',
-                    'language': language,
-                    'page_id': getattr(page, 'pageid', None)
-                }
-                
-                return page_data
-
-            except wikipedia.exceptions.DisambiguationError as e:
-                self.logger.warning(f"Disambiguation found for '{page_title}', trying the first option...")
-                try:
-                    first_option = e.options[0]
-                    return self._get_wikipedia_page_meta_data(first_option, language)
-                except:
-                    self.logger.warning(f"First option '{first_option}' did not work.")
-                    return None
-                
-            except wikipedia.exceptions.PageError:
-                self.logger.warning(f"Page not found: {page_title}")
-                return None
-            
-            except Exception as e:
-                if attempt < max_retries - 1:
-                    self.logger.debug(f"Attempt {attempt + 1} failed: {e}")
-                    self.logger.debug("Retrying...")
-                    time.sleep(rate_limit_delay)
-                else:
-                    self.logger.debug(f"Final attempt failed: {e}")
-                    return None
-                
-        return None
-
-    def search_political_topics(self, query, language, max_results=None):
+    def search_political_topics(self, query, language_code, max_results=None):
         """Search wikipedia for political trends in a specific language
         
         Args:
             query (str): Search term to look for
-            language (str): Language code to search in (e.g. 'en')
+            language_code (str): Language code to search in (e.g. 'en')
             max_results (int): Maximum number of results to return
             
         Returns:
             A list of collected page data from the specified language
         """
-        self.logger.info(f"Searching wikipedia for: '{query}' in language: '{language}'")
+        self.logger.info(f"Searching wikipedia for: '{query}' in language: '{language_code}'")
         
         if max_results is None:
             max_results = self.config['api']['search_max_results']
         
         try:
-            wikipedia.set_lang(language)
+            search_results = self.wiki_utils.search_using_config(query, language_code)
             
-            search_results = wikipedia.search(query, results=max_results)
-            self.logger.info(f"Found {len(search_results)} search results in '{language}'")
-            
-            if not search_results:
-                self.logger.warning(f"No results found for '{query}' in '{language}'")
-                return []
+            items_by_language = {language_code: search_results[:max_results]}
             
             def add_search_data(result):
                 return {'search_query': query}
             
-            collected_pages = self._collect_from_wikipedia_current_language(
-                search_results[:max_results],
+            collected_pages = self._handle_all_wikipedia_collection(
+                items_by_language,
                 f"search results for '{query}'",
-                language,
                 extra_data_func=add_search_data
             )
             
             return collected_pages
     
         except Exception as e:
-            self.logger.error(f"Search error in '{language}': {e}")
+            self.logger.error(f"Search error in '{language_code}': {e}")
             return []
         
     def save_data(
@@ -305,7 +214,6 @@ class WikipediaPoliticalCollector:
         previous_year_wiki_data = self.collect_political_events_for_years()
         
         self.logger.info("2. Collecting politician data...")
-
         politician_wiki_data = self.collect_politician_pages()
         
         self.logger.info("3. Collecting political topic data...")
