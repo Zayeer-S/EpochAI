@@ -204,7 +204,7 @@ class WikipediaUtils:
                 return page
             
             except wikipedia.exceptions.DisambiguationError as disambiguation_error:
-                self.logger.warning(f"Option '{option}' also has disambiguation: {disambiguation_error} - calling {self.handle_any_disambiguation_error.__name__} recursively (remaining attempts: {recursive_limit})")
+                self.logger.warning(f"Option '{option}' also has disambiguation: {disambiguation_error} - calling {self.handle_any_disambiguation_error.__name__} recursively (remaining attempts: {recursive_limit - 1})")
                 recursive_call_result = self.handle_any_disambiguation_error(
                     option,
                     disambiguation_error.options,
