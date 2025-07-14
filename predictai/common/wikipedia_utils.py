@@ -104,8 +104,8 @@ class WikipediaUtils:
                 self.logger.warning(f"No results found for '{query}' in '{language_code}'")
                 return []
             
-        except Exception as e:
-            self.logger.error(f"Search error for '{query}' in '{language_code}': {e}")
+        except Exception as general_error:
+            self.logger.error(f"Search error for '{query}' in '{language_code}': {general_error}")
             return []
             
     def switch_language(
@@ -125,8 +125,8 @@ class WikipediaUtils:
                 
                 return True
         
-        except Exception as e:
-            self.logger.error(f"Error switching to language: {language_code} - {e}")
+        except Exception as general_error:
+            self.logger.error(f"Error switching to language: {language_code} - {general_error}")
             return False
         
     def process_items_by_language(
@@ -169,8 +169,8 @@ class WikipediaUtils:
                         
                     time.sleep(self.config['api']['rate_limit_delay'])
                     
-                except Exception as e:
-                    self.logger.error(f"Error processing '{item} in '{language_code}': {e}")
+                except Exception as general_error:
+                    self.logger.error(f"Error processing '{item} in '{language_code}': {general_error}")
                     continue
                 
         return results_by_language
@@ -308,12 +308,12 @@ class WikipediaUtils:
                     
                 return page_data
                 
-            except Exception as e:
+            except Exception as general_error:
                 if attempt < max_retries - 1:
-                    self.logger.debug(f"Attempt {attempt + 1} failed for '{page_title}': {e}")
+                    self.logger.debug(f"Attempt {attempt + 1} failed for '{page_title}': {general_error}")
                     self.logger.debug("Retrying...")
                     time.sleep(rate_limit_delay * (attempt + 1))
                 else:
-                    self.logger.debug(f"Final attempt failed: {e}")
+                    self.logger.debug(f"Final attempt failed: {general_error}")
                     return None
         return None
