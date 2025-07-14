@@ -22,7 +22,8 @@ defaults:
       rate_limit_delay: 2.0
       max_retries: 3
       search_max_results: 5
-      request_timeout: 30  
+      request_timeout: 30
+      recursive_limit: 1 
 
 # wikipedia_collector.py configuration
 wikipedia:
@@ -35,7 +36,7 @@ wikipedia:
       - "Emmanuel Macron"
 
     fr:
-      - "Emmanuel Macron"
+      - "Présidence d'Emmanuel Macron"
 
   political_topics:
     en:
