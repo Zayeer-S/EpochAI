@@ -1,8 +1,9 @@
 import wikipedia
 
+from predictai.common.config_loader import ConfigLoader
+from predictai.common.wikipedia_utils import WikipediaUtils
+
 try:
-    from predictai.common.config_loader import ConfigLoader
-    
     all_collector_configs = ConfigLoader.get_all_collector_configs()
      
     print("=" * 30)
@@ -18,56 +19,69 @@ if not wiki_config:
     print("ERROR: NO WIKIPEDIA CONFIGURATION FOUND.")
     exit(1)
     
+wiki_utils = WikipediaUtils(wiki_config)
+if not wiki_utils:
+    print("ERROR: NO WIKIPEDIA UTILS FOUND.")
+    exit(1)
+    
 test_pages = []
 
-for language, politician_list in wiki_config['politicians'].items():
-    test_pages.extend(politician_list)
+# Build test pages list with proper structure (title, language, type)
+for language_code, politician_list in wiki_config['politicians'].items():
+    for politician in politician_list:
+        test_pages.append((politician, language_code, 'politician'))
     
-for language, topic_list in wiki_config['political_topics'].items():
-    test_pages.extend(topic_list)
+for language_code, topic_list in wiki_config['political_topics'].items():
+    for topic in topic_list:
+        test_pages.append((topic, language_code, 'topic'))
     
-for language, template_list in wiki_config['political_events_template'].items():
+for language_code, template_list in wiki_config['political_events_template'].items():
     for year in wiki_config['collection_years']:
         for template in template_list:
-            test_pages.append(template.format(year=year))
+            formatted_event = template.format(year=year)
+            test_pages.append((formatted_event, language_code, 'event'))
 
 print(f"=== TESTING WIKIPEDIA PAGE ACCESS ===")
 print(f"Testing {len(test_pages)} pages from configuration")
 
-for page_title in test_pages:
-    print(f"\nTesting: '{page_title}'")
-    try:
-        page = wikipedia.page(page_title)
+success_count = 0
+failure_count = 0
+
+for page_title, language_code, page_type in test_pages:
+    print(f"\nTesting ({language_code}) ({page_type}): '{page_title}'")
+    
+    page = wiki_utils.get_wikipedia_page(page_title, language_code)
+    
+    if page:
         print(f"\tSuccess: Found '{page.title}'")
         print(f"\tURL: {page.url}")
         print(f"\tSummary: {page.summary[:100]}...")
+        success_count += 1
+    else:
+        print(f"\tFailed to find '{page_title}'. Attempting search...")
         
-    except wikipedia.exceptions.DisambiguationError as e:
-        print(f"Disambiguation error, multiple options found")
-        print(f"\tOptions: {e.options[:5]}")
+        search_results = wiki_utils.search_using_config(page_title, language_code)
         
-        try:
-            print(f"\tTrying the first option: '{e.options[0]}'")
-            page = wikipedia.page(e.options[0])
-            print(f"\t\tSuccess with first option: '{page.title}'")
-                  
-        except Exception as e2:
-            print(f"\t\tFirst option also failed: {e2}")
+        if search_results:
+            print(f"\tSearch Suggestions: {search_results[:3]}")
+            print(f"\tRecommendation: Use '{search_results[0]}' instead of '{page_title}'")
+        else:
+            print(f"\tNo search results found - '{page_title}' may not exist on Wikipedia")
             
-    except wikipedia.exceptions.PageError:
-        print(f"\tSearching for similar pages...")
-        try:
-            search_results = wikipedia.search(page_title, results = 5)
-            print(f"\t\tSearch suggestions: {search_results}")
-        except:
-            print(f"\t\tSearch failed")
-    
-    except Exception as e:
-        print(f"\t\tError: {e}")
-        
-print("\n" + "=" * 30)
+        failure_count += 1
 
+print(f"\n" + "=" * 50)
+print(f"TEST RESULTS SUMMARY")
+print(f"=" * 50)
+print(f"Total pages tested: {len(test_pages)}")
+print(f"Successful retrievals: {success_count}")
+print(f"Failed retrievals: {failure_count}")
+print(f"Success rate: {(success_count/len(test_pages)*100):.1f}%")
+
+print(f"\n" + "=" * 30)
 print("CONFIGURATION SUMMARY")
+print(f"=" * 30)
+
 for collector_name, config in all_collector_configs.items():
     if config:
         print(f"{collector_name.upper()} COLLECTOR:")
@@ -77,7 +91,7 @@ for collector_name, config in all_collector_configs.items():
             print(f"\tTopics: {wiki_config['political_topics']}")
             
             formatted_events = []
-            for language, template_list in config['political_events_template'].items():
+            for language_code, template_list in config['political_events_template'].items():
                 for year in config['collection_years']:
                     for template in template_list:
                         formatted_events.append(template.format(year=year))
