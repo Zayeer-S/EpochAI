@@ -32,7 +32,7 @@ class ConfigValidator:
             (['political_topics'], dict),
             (['political_events_template'], dict),
             (['data_output', 'directory'], str),
-            (['data_output', 'default_type'], str)
+            (['data_output', 'default_type_wikipedia'], str)
         ]
         
         for path, expected_type in required_paths:  

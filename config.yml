@@ -14,8 +14,9 @@ defaults:
 
     data_output:
       directory: "data/raw"
-      default_type: "wikipedia_data"
+      default_type_wikipedia: "wikipedia_data"
       separate_files_by_year: false
+      file_format: "csv"
 
     api:
       language: ["en"]
@@ -56,7 +57,7 @@ wikipedia:
 
   data_output:
     directory: "data/raw"
-    default_type: "wikipedia_all_political_data"
+    default_type_wikipedia: "wikipedia_data"
     separate_files_by_year: false
   
   api:
