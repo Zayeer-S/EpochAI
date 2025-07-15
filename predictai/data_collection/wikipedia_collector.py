@@ -7,6 +7,7 @@ import pandas as pd
 from predictai.common.config_loader import ConfigLoader
 from predictai.common.logging_config import setup_logging, get_logger
 from predictai.common.wikipedia_utils import WikipediaUtils
+from predictai.common.data_utils import DataUtils
 
 class WikipediaPoliticalCollector:
     def __init__(self):
@@ -26,6 +27,7 @@ class WikipediaPoliticalCollector:
         self.collected_data = []
         
         self.wiki_utils = WikipediaUtils(self.config)
+        self.data_utils = DataUtils(self.config)
         
     def _handle_all_wikipedia_collection(
         self,
@@ -36,7 +38,7 @@ class WikipediaPoliticalCollector:
         """"""
         
         if not items_by_language:
-            self.logger(f"No items provided for {collection_type}")
+            self.logger.warning(f"No items provided for {collection_type}")
             return []
         
         self.logger.info(f"Collecting {collection_type} for {len(items_by_language)} items across {len(self.languages)} languages")
@@ -165,17 +167,17 @@ class WikipediaPoliticalCollector:
             self.logger.error(f"Search error in '{language_code}': {e}")
             return []
         
-    def save_data(
+    """def save_data(
         self, 
         data: List[Dict[str, Any]], 
         filename: Optional[str] = None,
         data_type: str ="political_data"
         ) -> Optional[str]:
-        """Saves the collected data
+        Saves the collected data
         
         Returns:
             "filepath" if successful, "None" if there is no data to save
-        """
+        
         if not data:
             self.logger.warning("No data collected to save")
             return None
@@ -201,7 +203,7 @@ class WikipediaPoliticalCollector:
             for language, count in language_counts.items():
                 self.logger.info(f"{language}: {count} records")
         
-        return filepath
+        return filepath"""
     
     def wikipedia_political_data_orchestrator(self):
         """Collect political data from multiple sources."""
@@ -226,14 +228,6 @@ class WikipediaPoliticalCollector:
         self.logger.info(f"==== Collection Complete ===")
         self.logger.info(f"Total data points collected: {len(all_political_data)}")
         
-        if all_political_data:
-            df_temp = pd.DataFrame(all_political_data)
-            if 'language' in df_temp.columns:
-                language_counts = df_temp['language'].value_counts()
-                self.logger.info(f"Data points by language:")
-                for language, count in language_counts.items():
-                    self.logger.info(f"{language}: {count} records")
-        
         return all_political_data
     
 def main():
@@ -245,19 +239,12 @@ def main():
     all_political_data = collector.wikipedia_political_data_orchestrator()
     
     if all_political_data:
-        config_data_type = collector.config['data_output']['default_type']
-        filepath = collector.save_data(all_political_data, data_type=config_data_type)
+        collector.data_utils.save_collected_data(all_political_data, collector.config['data_output']['default_type_wikipedia'])
         
-        df = pd.DataFrame(all_political_data)
-        collector.logger.info("=" * 30)
-        collector.logger.info(f"DATA SUMMARY STATISTICS")
-        collector.logger.info(f"Total articles collected: {len(df)}")
-        collector.logger.info(f"Average content length: {df['content'].str.len().mean():.0f} characters")
-        collector.logger.info(f"Data saved to: {filepath}")
+        collector.data_utils.log_data_summary(all_political_data)
         
-        
-    else:
-        collector.logger.info("No data collected. Unknown reason.")
+    if not all_political_data:
+        collector.logger.warning("No data collected. Unknown reason.")
         
 if __name__ == "__main__":
     main()
