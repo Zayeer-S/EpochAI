@@ -5,7 +5,6 @@ from typing import Any, Dict, List, Optional
 import pandas as pd
 from pathlib import Path
 
-from predictai.common.config_loader import ConfigLoader
 from predictai.common.logging_config import get_logger
 
 class DataUtils:
