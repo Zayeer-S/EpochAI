@@ -5,7 +5,6 @@ from typing import Any, Dict, List, Optional, Set
 import pandas as pd
 from pathlib import Path
 
-from predictai.common.config_loader import ConfigLoader
 from predictai.common.logging_config import get_logger
 
 class DataUtils:
@@ -25,7 +24,7 @@ class DataUtils:
         
     def save_collected_data(
         self,
-        data: List[Dict[str, Any]],
+        collected_data: List[Dict[str, Any]],
         data_type: str,
         file_format: str = None,
         output_directory: str = None,
@@ -38,7 +37,7 @@ class DataUtils:
         Returns:
             File path if successful, None if failure occurs or no data
         """
-        if not data:
+        if not collected_data:
             self.logger.warning("No data provided to save.")
             return None
         
@@ -53,13 +52,13 @@ class DataUtils:
             validate_before_save = self.config['data_validator']['validate_before_save']
             
         if validate_before_save:
-            if not self.validate_data_structure_and_quality(data):
+            if not self.validate_data_structure_and_quality(collected_data):
                 self.logger.error("Data validation failed, cannot save invalid data")
                 return None
             
         Path(output_directory).mkdir(parents=True, exist_ok=True)
         
-        df = pd.DataFrame(data)
+        df = pd.DataFrame(collected_data)
         
         filepath = os.path.join(output_directory, filename)
         
@@ -87,7 +86,7 @@ class DataUtils:
         
     def get_data_summary(
         self,
-        data: List[Dict[str, Any]]
+        collected_data: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """ 
         Generates data summary statistics for collected data
@@ -95,10 +94,10 @@ class DataUtils:
         Returns:
             Dictionary containing summary statistics
         """
-        if not data:
+        if not collected_data:
             return {"total_records": 0}
         
-        df = pd.DataFrame(data)
+        df = pd.DataFrame(collected_data)
         summary = {
             'total_records': len(df),
             'columns': list(df.columns),
@@ -120,12 +119,12 @@ class DataUtils:
     
     def log_data_summary(
         self,
-        data: List[Dict[str, Any]]
+        collected_data: List[Dict[str, Any]]
         ) -> None:
         """
         Logs summary statistcs and gets them from helper function
         """
-        summary = self.get_data_summary(data)
+        summary = self.get_data_summary(collected_data)
         
         self.logger.info("="*30)
         self.logger.info("Data Summary Statistics")
