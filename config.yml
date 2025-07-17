@@ -12,6 +12,15 @@ defaults:
     political_topics: []
     political_events_template: ["{year} in politics"] ## This becomes e.g. "2023 in politics"
 
+    data_validator: 
+      validate_before_save: True # True = Yes, validate before saving (and vice versa)
+      min_content_length: 10
+      validation_error_logging_limit: 10
+      utf8_corruption_patterns: [ 
+        'Ã©', 'Ã¨', 'Ã ', 'Ã¡', 'Ã¢', 'Ã¤', 'Ã§', 'Ã¯', 'Ã´', 'Ã¹', 'Ã»', 'Ã¼', 'â€™', 'â€œ', 'â€', 'â€¢', 'â€"', 'â€"', 'Â', 'Ž', 'â€ž', 'â€º'
+      ]
+      required_fields_wikipedia: {'title', 'content', 'url', 'language', 'collected_at'}
+
     data_output:
       directory: "data/raw"
       default_type_wikipedia: "wikipedia_data"
