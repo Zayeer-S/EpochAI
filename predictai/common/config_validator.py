@@ -4,6 +4,10 @@ from typing import Dict, List, Set
 class ConfigValidator:
     @staticmethod
     def _get_constraints_config():
+        """
+        Gets constraints config via config_loader.py
+        Note: this function is only really helpful for config_validator, probably shouldn't use this function outside of config_validator
+        """
         from predictai.common.config_loader import ConfigLoader
         return ConfigLoader.load_constraints_config()
                 
@@ -142,7 +146,12 @@ class ValidateWholeConfig(BaseModel):
     
     @classmethod
     def validate_config(cls, config):
-        """Returns config as an instance of a class unpacked into keyword arguments"""
+        """
+        Validates config dictionary
+        
+        Return:
+            The parent class (ValidateWholeConfig) as a pydantic model instance
+        """
         try:
             return cls(**config)
         except Exception as general_error:
