@@ -4,6 +4,23 @@ logging:
   log_to_file: true
   log_directory: "logs"
 
+# Data Setup
+data_settings:
+  data_output:
+    directory: "data/raw"
+    default_type_wikipedia: "wikipedia_data"
+    separate_files_by_year: false
+    file_format: "csv"
+
+  data_validator: 
+    validate_before_save: True # True = Yes, validate before saving (and vice versa)
+    min_content_length: 10
+    error_logging_limit: 10
+    utf8_corruption_patterns: [ 
+      'Ã©', 'Ã¨', 'Ã ', 'Ã¡', 'Ã¢', 'Ã¤', 'Ã§', 'Ã¯', 'Ã´', 'Ã¹', 'Ã»', 'Ã¼', 'â€™', 'â€œ', 'â€', 'â€¢', 'â€"', 'â€"', 'Â', 'Ž', 'â€ž', 'â€º'
+    ]
+    required_fields_wikipedia: ['title', 'content', 'url', 'language', 'collected_at']
+
 # Default setup for collectors
 defaults:
   wikipedia:
@@ -11,21 +28,6 @@ defaults:
     politicians: []
     political_topics: []
     political_events_template: ["{year} in politics"] ## This becomes e.g. "2023 in politics"
-
-    data_validator: 
-      validate_before_save: True # True = Yes, validate before saving (and vice versa)
-      min_content_length: 10
-      validation_error_logging_limit: 10
-      utf8_corruption_patterns: [ 
-        'Ã©', 'Ã¨', 'Ã ', 'Ã¡', 'Ã¢', 'Ã¤', 'Ã§', 'Ã¯', 'Ã´', 'Ã¹', 'Ã»', 'Ã¼', 'â€™', 'â€œ', 'â€', 'â€¢', 'â€"', 'â€"', 'Â', 'Ž', 'â€ž', 'â€º'
-      ]
-      required_fields_wikipedia: {'title', 'content', 'url', 'language', 'collected_at'}
-
-    data_output:
-      directory: "data/raw"
-      default_type_wikipedia: "wikipedia_data"
-      separate_files_by_year: false
-      file_format: "csv"
 
     api:
       language: ["en"]
@@ -63,11 +65,6 @@ wikipedia:
 
     fr:
       - "{year} en politique"
-
-  data_output:
-    directory: "data/raw"
-    default_type_wikipedia: "wikipedia_data"
-    separate_files_by_year: false
   
   api:
     language: ["en", "fr"]

@@ -1,0 +1,28 @@
+data_output:
+  allowed_formats: ['csv', 'json', 'xlsx', 'excel']
+
+data_validator:
+  min_content_length: 10
+  error_logging_limit: 10
+
+logging_config:
+  valid_levels: ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
+
+wikipedia:
+  valid_2iso_language_codes: ['en', 'fr', 'es', 'de', 'it', 'pt', 'ru', 'zh', 'ja', 'ar', 'nl',
+    'sv', 'no', 'da', 'fi', 'pl', 'tr', 'ko', 'hi', 'th', 'vi', 'id', 'ms', 'tl', 'he', 'fa',
+    'ur', 'bn', 'ta', 'te', 'mr', 'gu', 'kn', 'ml', 'or', 'pa', 'as', 'ne', 'si', 'my', 'km',
+    'lo', 'ka', 'am', 'ti', 'sw', 'zu', 'af', 'xh', 'st', 'tn', 'ss', 've', 'ts', 'nr', 'ig',
+    'yo', 'ha', 'ff', 'wo', 'mg', 'ny', 'sn', 'rw', 'rn', 'so', 'om', 'aa', 'dv', 'ps', 'sd',
+    'ks', 'ug', 'bo', 'dz', 'mn', 'ky', 'kk', 'uz', 'tk', 'tg', 'az', 'hy', 'ka', 'eu', 'ca',
+    'gl', 'cy', 'ga', 'gd', 'br', 'co', 'mt', 'sq', 'mk', 'bg', 'hr', 'sr', 'bs', 'sl', 'sk',
+    'cs', 'hu', 'ro', 'lv', 'lt', 'et', 'is', 'fo', 'kl']
+
+  api:
+    min_rate_limit_delay: 0.2
+    min_retries: 1
+    max_retries: 10
+    min_request_timeout: 5
+    min_recursive_limit: 1
+    max_recursive_limit: 3
+    search_max_results: 10
