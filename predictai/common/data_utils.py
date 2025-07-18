@@ -165,6 +165,12 @@ class DataUtils:
         if required_fields is None:
             required_fields = self.config['data_validator']['required_fields_wikipedia']
             
+        if isinstance(required_fields, list):
+            required_fields = set(required_fields)
+        elif not isinstance(required_fields, set):
+            self.logger.error(f"required_fields currently {type(required_fields)}, must be a list or a set.")
+            return False
+            
         validation_errors = []
         
         for i, record in enumerate(collected_data):
@@ -202,7 +208,7 @@ class DataUtils:
                     validation_errors.append(f"Record {i}: Invalid URL format: {url}")
                     
         if validation_errors:
-            limit = self.config['data_validator']['validation_error_logging_limit']
+            limit = self.config['data_validator']['error_logging_limit']
             self.logger.warning(f"Data validation found {len(validation_errors)} issues:")
             for error in validation_errors[:limit]:
                 self.logger.warning(f"  - {error}")
