@@ -27,7 +27,9 @@ class WikipediaPoliticalCollector:
         self.collected_data = []
         
         self.wiki_utils = WikipediaUtils(self.config)
-        self.data_utils = DataUtils(self.config)
+        
+        self.data_config = ConfigLoader.get_data_config()
+        self.data_utils = DataUtils(self.data_config)
         
     def _handle_all_wikipedia_collection(
         self,
@@ -239,7 +241,12 @@ def main():
     all_political_data = collector.wikipedia_political_data_orchestrator()
     
     if all_political_data:
-        collector.data_utils.save_collected_data(all_political_data, collector.config['data_output']['default_type_wikipedia'])
+        data_type = collector.data_config['data_output']['default_type_wikipedia']
+        
+        collector.data_utils.save_collected_data(
+            collected_data=all_political_data,
+            data_type=data_type
+            )
         
         collector.data_utils.log_data_summary(all_political_data)
         
