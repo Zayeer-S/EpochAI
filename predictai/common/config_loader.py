@@ -95,6 +95,12 @@ class ConfigLoader:
         config: Dict[str, Any],
         config_name: str
         ) -> Dict[str, Any]:
+        """
+        Takes the default config and the override config and merges them via a helper function
+        
+        Returns:
+            Merged config (default config settings overriden by override config)
+        """
         defaults = config.get('defaults').get(config_name)
         main_config = config.get(config_name)
         merged_config = ConfigLoader.override_default_config_values(defaults, main_config)
