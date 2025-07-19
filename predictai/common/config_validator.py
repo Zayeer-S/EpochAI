@@ -14,6 +14,20 @@ class ConfigValidator:
 class IncrementalSavingConfig(BaseModel):
     enabled: bool
     batch_size: int
+    
+    @model_validator(mode='after')
+    def validate_using_constraints(self):
+        constraints_config = ConfigValidator._get_constraints_config()
+        
+        incremental_saving_config = constraints_config['data_output']['incremental_saving']
+        
+        min_batch_size = incremental_saving_config['min_batch_size']
+        max_batch_size = incremental_saving_config['max_batch_size']
+        
+        if not (min_batch_size <= self.batch_size <= max_batch_size):
+            raise ValueError(f"batch_size currently {self.batch_size}, must be: {min_batch_size} <= batch_size <= {max_batch_size}")
+        
+        return self
                 
 class DataOutputConfig(BaseModel):
     directory: str

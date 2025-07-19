@@ -1,6 +1,10 @@
 data_output:
   allowed_formats: ['csv', 'json', 'xlsx', 'excel']
 
+  incremental_saving:
+    min_batch_size: 1 # Low currently to allow testing
+    max_batch_size: 1000
+
 data_validator:
   min_content_length: 10
   error_logging_limit: 10
