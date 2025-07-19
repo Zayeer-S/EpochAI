@@ -10,12 +10,17 @@ class ConfigValidator:
         """
         from predictai.common.config_loader import ConfigLoader
         return ConfigLoader.load_constraints_config()
+    
+class IncrementalSavingConfig(BaseModel):
+    enabled: bool
+    batch_size: int
                 
 class DataOutputConfig(BaseModel):
     directory: str
     default_type_wikipedia: str
     separate_files_by_year: bool    
     file_format: str
+    incremental_saving: IncrementalSavingConfig
     
     @model_validator(mode='after')
     def validate_using_constraints(self):
