@@ -5,6 +5,7 @@ PredictAI/
 ├── .env                                # Hide API keys and any other confidential information
 ├── .gitignore                          # Files to exclude from version control
 ├── config.yml                          # Configuration settings
+├── constraints.yml                          # Constraint configuration settings
 ├── README.md                           # Project overview and documentation
 ├── requirements.txt                    # Python dependencies
 ├── setup.py                            # Package installation setup
@@ -44,12 +45,14 @@ PredictAI/
 │   │   ├── __init__.py     
 │   │   ├── config_loader.py            # Loads config.yml and calls config_validator.py
 │   │   ├── config_validator.py         # Validates config and returns error messages if invalid
-│   │   ├── logging_config.py           # Creates a centralized logging for the projec
 │   │   ├── data_utils.py               # Shared data processing functions
-│   │   └── evaluation.py               # Model evaluation metrics
+│   │   ├── evaluation.py               # Model evaluation metrics
+│   │   ├── logging_config.py           # Creates a centralized logging for the project
+│   │   └── wikipedia_utils.py          # Utils for wikipedia_collector.py
 │   ├── data_collection/                # Data collection modules
 │   │   ├── __init__.py     
-│   │   ├── wikipedia_collector.py       # Political data collections from Wikipedia API
+│   │   ├── debug.py                    # Debug script to check if stuff that needs to be searched results in successful searches or not
+│   │   ├── wikipedia_collector.py      # Political data collections from Wikipedia API
 │   │   ├── social_collector.py         # Social media data collection
 │   │   └── market_collector.py         # Financial data collection
 │   ├── data_processing/                # Data processing modules
