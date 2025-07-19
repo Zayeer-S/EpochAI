@@ -17,6 +17,8 @@ class DataUtils:
             self.logger = get_logger(__name__)
             
             self.incremental_save_counter = 0
+            self.current_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            
             
         except ImportError as import_error:
             raise ImportError(f"Error importing modules: {import_error}")
@@ -60,8 +62,7 @@ class DataUtils:
                 self.logger.error("Data validation failed, cannot save invalid data")
                 return None
             
-        current_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f"{data_type}_{current_timestamp}.{file_format}"
+        filename = f"{data_type}_{self.current_timestamp}.{file_format}"
             
         Path(output_directory).mkdir(parents=True, exist_ok=True)
         filepath = os.path.join(output_directory, filename)
