@@ -12,8 +12,12 @@ data_settings:
     separate_files_by_year: false
     file_format: "csv"
 
+    incremental_saving:
+      enabled: True
+      batch_size: 10
+
   data_validator: 
-    validate_before_save: True # True = Yes, validate before saving (and vice versa)
+    validate_before_save: False # True = Yes, validate before saving (and vice versa)
     min_content_length: 10
     error_logging_limit: 10
     utf8_corruption_patterns: [ 
