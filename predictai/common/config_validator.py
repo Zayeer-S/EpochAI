@@ -1,140 +1,178 @@
+from pydantic import BaseModel, model_validator
+from typing import Dict, List, Set
+
 class ConfigValidator:
-    """Validates configuration for all modules"""
+    @staticmethod
+    def _get_constraints_config():
+        """
+        Gets constraints config via config_loader.py
+        Note: this function is only really helpful for config_validator, probably shouldn't use this function outside of config_validator
+        """
+        from predictai.common.config_loader import ConfigLoader
+        return ConfigLoader.load_constraints_config()
     
-    VALID_ISO_LANGUAGE_CODES = {
-        'en', 'fr', 'de', 'ru', 'it', 'pt', 'pl', 'nl', 'sr', 'ro', # European
-        
-        'ar', 'tr', 'fa', 'he', # MENA
-        
-        'ur', 'bn', 'hi', # South asian
-        
-        'zh', 'ko', 'ja', # East asian
-        
-        'id', 'vi' # SEA
-    }
+class IncrementalSavingConfig(BaseModel):
+    enabled: bool
+    batch_size: int
     
-    CORRUPTION_PATTERNS = [
-        'Ã©', 'Ã¨', 'Ã ', 'Ã¡', 'Ã¢', 'Ã¤', 'Ã§', 'Ã¯', 'Ã´', 'Ã¹', 'Ã»', 'Ã¼',
-        'â€™', 'â€œ', 'â€', 'â€¢', 'â€"', 'â€"', 'Â', 'Ž', 'â€ž', 'â€º'
-    ]
+    @model_validator(mode='after')
+    def validate_using_constraints(self):
+        constraints_config = ConfigValidator._get_constraints_config()
+        
+        incremental_saving_config = constraints_config['data_output']['incremental_saving']
+        
+        min_batch_size = incremental_saving_config['min_batch_size']
+        max_batch_size = incremental_saving_config['max_batch_size']
+        
+        if not (min_batch_size <= self.batch_size <= max_batch_size):
+            raise ValueError(f"batch_size currently {self.batch_size}, must be: {min_batch_size} <= batch_size <= {max_batch_size}")
+        
+        return self
+                
+class DataOutputConfig(BaseModel):
+    directory: str
+    default_type_wikipedia: str
+    separate_files_by_year: bool    
+    file_format: str
+    incremental_saving: IncrementalSavingConfig
     
-    @staticmethod
-    def validate_wikipedia_config(config):
-        """Validates only wikipedia collector configuration by checking for API settings and checks for any UTF-8 corruption"""
+    @model_validator(mode='after')
+    def validate_using_constraints(self):
+        constraints_config = ConfigValidator._get_constraints_config()
         
-        required_paths = [
-            (['api', 'language'], list),
-            (['api', 'rate_limit_delay'], (int, float)),
-            (['api', 'max_retries'], int),
-            (['api', 'search_max_results'], int),
-            (['collection_years'], list),
-            (['politicians'], dict),
-            (['political_topics'], dict),
-            (['political_events_template'], dict),
-            (['data_output', 'directory'], str),
-            (['data_output', 'default_type_wikipedia'], str)
-        ]
+        data_output_constraints = constraints_config['data_output']
         
-        for path, expected_type in required_paths:  
-            try:
-                value = config
-                for key in path:
-                    value = value[key]
-                    
-                if not isinstance(value, expected_type):
-                    raise ValueError(f"Config {'.'.join(path)} must be of type {expected_type.__name__}, got {type(value).__name__}")
-                
-                if path == ['api', 'rate_limit_delay'] and value < 0.2:
-                    raise ValueError(f"rate_limit_delay must be >= 0.2")
-                
-                if path == ['api', 'max_retries'] and (value < 1 or value > 10):
-                    raise ValueError("max_retries must be 1 <= max_retries <= 10")
-                
-                if path == ['api', 'search_max_results'] and (value < 1 or value > 15):
-                    raise ValueError("search_max_results must be 1 <= search_max_results <= 15")
-                
-                if path == ['collection_years'] and len(value) == 0:
-                    raise ValueError("collection_years cannot be empty")
-                
-                if path == ['api', 'language']:
-                    ConfigValidator._validate_language_codes(value)
-             
-            except KeyError:
-                raise ValueError(f"Missing required config: {'.'.join(path)}")
-            
-        ConfigValidator._validate_utf8_content(config)
-            
-    @staticmethod
-    def validate_logging_config(config):
-        """Validate logging configuration"""
+        allowed_formats = data_output_constraints.get('allowed_formats')
+        if self.file_format.lower() not in allowed_formats:
+            raise ValueError(f"Current file format is '{self.file_format}', must be one of: {allowed_formats}")
         
-        valid_levels = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
+        return self
         
-        level = config.get('level', 'INFO')
-        if level.upper() not in valid_levels:
-            raise ValueError(f"Invalid log level '{level}'. Must be one of: {valid_levels}")
+class DataValidatorConfig(BaseModel):
+    validate_before_save: bool
+    min_content_length: int
+    error_logging_limit: int
+    utf8_corruption_patterns: List[str]
+    required_fields_wikipedia: Set[str]
+    
+    @model_validator(mode='after')
+    def validate_using_constraints(self):
+        constraints_config = ConfigValidator._get_constraints_config()
         
-        log_to_file = config.get('log_to_file', True)
-        if not isinstance(log_to_file, bool):
-            raise ValueError("log_to_file must be a bool")
+        data_validator_constraints = constraints_config.get('data_validator', {})
         
-        log_dir = config.get('log_directory', 'logs')
-        if not isinstance(log_dir, str):
-            raise ValueError("log_to_directory must be a string")
+        min_content_length = data_validator_constraints.get('min_content_length')
+        if not (self.min_content_length >= min_content_length):
+            raise ValueError(f"min_content_length currently '{self.min_content_length}', must be: min_content_length >= {min_content_length}")
         
-        ConfigValidator._check_string_for_corruption(level, "log level")
-        ConfigValidator._check_string_for_corruption(log_dir, "log directory")
+        error_logging_limit = data_validator_constraints.get('error_logging_limit')
+        if not (self.error_logging_limit >= error_logging_limit):
+            raise ValueError(f"error_logging_limit currently '{self.error_logging_limit}', must be: error_logging_limit >= {error_logging_limit}")
         
-    @staticmethod
-    def _validate_language_codes(language_list):
-        """Validates language codes in config are valid/accepted ISO codes and are properly formatted"""
-        if not isinstance(language_list, list) or len(language_list) == 0:
-            raise ValueError("Language must be a non-empty list")
+        return self
+    
+class DataSettings(BaseModel):
+    data_output: DataOutputConfig
+    data_validator: DataValidatorConfig
         
-        for language in language_list:
-            if not isinstance(language, str):
-                raise ValueError(f"Language codes must be a string, got {type(language).__name__}: {language}")
-            
-            ConfigValidator._check_string_for_corruption(language, f"Language code: '{language}'")
-            
-            if language.lower() not in ConfigValidator.VALID_ISO_LANGUAGE_CODES:
-                raise ValueError (
-                    f"Invalid language code: '{language}'. Must be one of: {sorted(ConfigValidator.VALID_ISO_LANGUAGE_CODES)}"
-                )
-                
-    @staticmethod
-    def _validate_utf8_content(config, path=''):
-        """Recursively validates UTF-8 content in the config"""
-        if isinstance(config, dict):
-            for key, value in config.items():
-                current_path = f"{path}.{key}" if path else key
-                
-                if isinstance(key, str):
-                    ConfigValidator._check_string_for_corruption(key, f"config key '{current_path}'")
-                    
-                ConfigValidator._validate_utf8_content(value, current_path)
-                
-        elif isinstance(config, list):
-            for i, item in enumerate(config):
-                current_path = f"{path}[{i}]"
-                ConfigValidator._validate_utf8_content(item, current_path)
-                
-        elif isinstance(config, str):
-            ConfigValidator._check_string_for_corruption(config, f"config value '{path}'")
-            
-    @staticmethod
-    def _check_string_for_corruption(text, context="string"):
-        """Checks for common UTF-8 corruption patterns"""
-        if not isinstance(text, str):
-            raise ValueError(f"{context} must be a string but got type: {type(text).__name__}: {text}")
+class LoggingConfig(BaseModel):
+    level: str
+    log_to_file: bool
+    log_directory: str
+    
+    @model_validator(mode='after')
+    def validate_logging_config(self):
+        constraints_config = ConfigValidator._get_constraints_config()
         
-        for pattern in ConfigValidator.CORRUPTION_PATTERNS:
-            if pattern in text:
-                raise ValueError(
-                    f"UTF-8 corruption pattern detected in {context}: '{text}' containts '{pattern}'"
-                )
-                
+        logging_constraints = constraints_config.get('logging_config')
+        
+        valid_levels = logging_constraints.get('valid_levels')
+        if self.level.upper() not in valid_levels:
+            raise ValueError(f"level currently '{self.level}', level must be one of: {sorted(valid_levels)}")
+        
+        return self
+    
+class WikipediaApiConfig(BaseModel):
+    language: List[str]
+    rate_limit_delay: float
+    max_retries: int
+    search_max_results: int
+    request_timeout: int
+    recursive_limit: int
+    
+    @model_validator(mode='after')
+    def validate_using_constraints(self):
+        constraints_config = ConfigValidator._get_constraints_config()
+        
+        wikipedia_constraints = constraints_config.get('wikipedia', {})
+        api_constraints = wikipedia_constraints.get('api', {})
+        
+        min_rate_limit_delay = api_constraints.get('min_rate_limit_delay')
+        if self.rate_limit_delay < min_rate_limit_delay:
+            raise ValueError(f"rate_limit_delay is currently '{self.rate_limit_delay}', must be: rate_limit_delay >= {min_rate_limit_delay}")
+        
+        min_retries = api_constraints.get('min_retries')
+        max_retries = api_constraints.get('max_retries')
+        if not (min_retries <= self.max_retries <= max_retries):
+            raise ValueError(f"max_retries is currently '{self.max_retries}', must be: {min_retries} <= max_retries <= {max_retries}")
+        
+        search_max_results = api_constraints.get('search_max_results')
+        if not (self.search_max_results <= search_max_results):
+            raise ValueError(f"search_max_results is currently '{self.search_max_results}', must be: search_max_results <= {search_max_results}")
+
+        min_timeout = api_constraints.get('min_request_timeout')
+        if self.request_timeout < min_timeout:
+            raise ValueError(f"request_timeout is currently '{self.request_timeout}', must be: request_timeout >= {min_timeout}")
+        
+        min_recursive_limit = api_constraints.get('min_recursive_limit')
+        max_recursive_limit = api_constraints.get('max_recursive_limit')
+        if not (min_recursive_limit <= self.recursive_limit <= max_recursive_limit):
+            if (self.recursive_limit > max_recursive_limit):
+                raise ValueError(f"recursive_limit is currently '{self.recursive_limit}' which is greater than max: {max_recursive_limit}. Just use iteration at this point.")
+            raise ValueError(f"Current recursive_limit is currently '{self.recursive_limit}' but must be: {min_recursive_limit} <= recursive_limit <= {max_recursive_limit}")
+        
+        return self
+    
+class WikipediaConfig(BaseModel):
+    collection_years: List[int]
+    politicians: Dict[str, List[str]]
+    political_topics: Dict[str, List[str]]
+    political_events_template: Dict[str, List[str]]
+    api: WikipediaApiConfig
+    
+    @model_validator(mode="after")
+    def validate_constraints(self):
+        constraints_config = ConfigValidator._get_constraints_config()
+        wikipedia_constraints = constraints_config.get('wikipedia')
+        
+        valid_language_codes = wikipedia_constraints.get('valid_2iso_language_codes')
+        
+        all_language_codes = set()
+        all_language_codes.update(self.politicians.keys())
+        all_language_codes.update(self.political_topics.keys())
+        all_language_codes.update(self.political_events_template.keys())
+        
+        invalid_language_codes = all_language_codes - set(valid_language_codes)
+        if invalid_language_codes:
+            raise ValueError(f"Invalid language codes: {invalid_language_codes}. Valid codes {valid_language_codes}")
+        
+        return self
+    
+class ValidateWholeConfig(BaseModel):    
+    data_settings: DataSettings
+    logging: LoggingConfig
+    wikipedia: WikipediaConfig
+    
+    @classmethod
+    def validate_config(cls, config):
+        """
+        Validates config dictionary
+        
+        Return:
+            The parent class (ValidateWholeConfig) as a pydantic model instance
+        """
         try:
-            text.encode('utf-8').decode('utf-8')
-        except UnicodeError as e:
-            raise ValueError(f"Unicode error in {context}: '{text}' - {e}")
+            return cls(**config)
+        except Exception as general_error:
+            raise ValueError(f"Error validating config: {general_error}")
+    
