@@ -1,6 +1,6 @@
 import os
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import pandas as pd
 from pathlib import Path
@@ -16,62 +16,188 @@ class DataUtils:
             self.config = config
             self.logger = get_logger(__name__)
             
+            self.incremental_save_counter = 0
+            
         except ImportError as import_error:
             raise ImportError(f"Error importing modules: {import_error}")
         
         except Exception as general_error:
             self.logger.error(f"General Error: {general_error}")
+            
+    def _save_common(
+    self,
+    collected_data: List[Dict[str, Any]],
+    data_type: str,
+    file_format: str = None,
+    output_directory: str = None,
+    validate_before_save: bool = None,
+    incremental_saving: bool = None
+    ) -> Optional[Tuple[str, str, bool]]:
+        """
+        Common functionalities both incremental and at end save use
         
-    def save_collected_data(
-        self,
-        collected_data: List[Dict[str, Any]],
-        data_type: str,
-        file_format: str = None,
-        output_directory: str = None,
-        filename: str = None,
-        validate_before_save: bool = None
-        ) -> Optional[str]:
-        """ 
-        Saves collected data to file in specified format
-        
-        Returns:
-            File path if successful, None if failure occurs or no data
+        Notes:
+            Checks if there is collected_data and validates it, gets config values
+            
+        Returns (in order):
+            file_format, filepath, incremental_saving (all str)
         """
         if not collected_data:
-            self.logger.warning("No data provided to save.")
+            self.logger.warning("No data provided to save")
             return None
         
         if file_format is None:
             file_format = self.config['data_output']['file_format']
         if output_directory is None:
             output_directory = self.config['data_output']['directory']
-        if filename is None:
-            current_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            filename = f"{data_type}_{current_timestamp}.{file_format}"
         if validate_before_save is None:
             validate_before_save = self.config['data_validator']['validate_before_save']
+        if incremental_saving is None:
+            incremental_saving = self.config['data_output']['incremental_saving']['enabled']
             
         if validate_before_save:
             if not self.validate_data_structure_and_quality(collected_data):
                 self.logger.error("Data validation failed, cannot save invalid data")
                 return None
             
+        current_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"{data_type}_{current_timestamp}.{file_format}"
+            
         Path(output_directory).mkdir(parents=True, exist_ok=True)
+        filepath = os.path.join(output_directory, filename)
+        
+        if any(x is None for x in (file_format, filepath, incremental_saving)):
+            self.logger.error(f"Error one of these three is None: file_format: {file_format} - filepath: {filepath} - incremental_saving: {incremental_saving}")
+            return None
+        
+        return file_format, filepath, incremental_saving
+            
+    def save_incrementally(
+        self,
+        collected_data: List[Dict[str, Any]],
+        data_type: str,
+    ) -> Optional[str]:
+        """
+        Saves data incrementally to the same file
+                
+        Args:
+            data_type (str): the type of data being collected by the collector
+        
+        Returns:
+            filepath (str) of the file where the save occurred
+            
+        Note:
+            Use this for large collections. Fails fast!
+        """
+        self.incremental_save_counter += 1
+        
+        result = self._save_common(
+            collected_data,
+            data_type,
+        )
+        if result is None:
+            self.logger.error(f"{self._save_common.__name__} returning as None for batch {self.incremental_save_counter}.")
+            exit(1)
+        
+        file_format, filepath, incremental_saving = result
+        
+        if not incremental_saving:
+            self.logger.error(f"Error incremental saving being called even though incremental_saving is False: {incremental_saving}")
+            return None
+        
+        self.logger.info("="*30)
+        self.logger.info(f"Save {self.incremental_save_counter}")
+        self.logger.info(f"Starting batch save of {len(collected_data)} articles")
+        
+        first_article = collected_data[0].get('title')
+        last_article = collected_data[-1].get('title')
+        self.logger.info(f"First article in batch: {first_article}")
+        self.logger.info(f"Last article in batch: {last_article}")
+        
+        df = pd.DataFrame(collected_data)
+        try:
+            file_format_lowered = file_format.lower()
+            
+            file_exists = os.path.exists(filepath)
+            
+            if file_format_lowered == 'json':
+                if file_exists:
+                    existing_df = pd.read_json(filepath, orient='records')
+                    combined_df = pd.concat([existing_df, df], ignore_index=True)
+                else:
+                    combined_df = df
+                combined_df.to_json(filepath, orient='records', indent=2)
+            elif file_format_lowered == 'xlsx' or file_format_lowered == 'excel':
+                if file_exists:
+                    existing_df = pd.read_excel(filepath)
+                    combined_df = pd.concat([existing_df, df], ignore_index=True)
+                else:
+                    combined_df = df
+                combined_df.to_excel(filepath, index=False)
+            else:
+                if file_format_lowered != 'csv':
+                    self.logger.warning(f"File format in config currently: {file_format} (code checked using '{file_format_lowered}') - Still saving data as .csv")
+                df.to_csv(
+                    filepath,
+                    mode='a',
+                    header=not file_exists,
+                    index=False
+                )
+                
+        except Exception as general_error:
+            self.logger.error(f"Error saving batch to '{filepath}': {general_error}")
+            return None
+        
+        self.logger.info (f"Batch appended to: {filepath}")
+        self.logger.info(f"Records in this batch: {len(df)}")
+        self.logger.info("="*30)
+        
+        return filepath
+    
+    def save_at_end(
+        self,
+        collected_data: List[Dict[str, Any]],
+        data_type: str
+    ) -> Optional[str]:
+        """
+        Saves data to a single file at the end of collection
+        
+        Args:
+            data_type (str): the type of data being collected by the collector
+        
+        Returns:
+            filepath (str) of the file where the save occurred
+            
+        Note:
+            Use this for small collections. Fails gracefully!
+        """
+        self.logger.info("Starting save attempt")
+        
+        result = self._save_common(
+            collected_data,
+            data_type,
+        )
+        if result is None:
+            self.logger.error(f"{self._save_common.__name__} is returning None")
+            return None
+        
+        file_format, filepath, incremental_saving = result
+        
+        if incremental_saving:
+            self.logger.error(f"Save at end being called even though incremental_saving is True: {incremental_saving}")
+            return None
         
         df = pd.DataFrame(collected_data)
         
-        filepath = os.path.join(output_directory, filename)
-        
         try:
             file_format_lowered = file_format.lower()
-            if file_format_lowered == 'csv':
-                df.to_csv(filepath, index=False)
-            elif file_format_lowered == 'json':
+            if file_format_lowered == 'json':
                 df.to_json(filepath, orient='records', indent=2)
             elif file_format_lowered == 'xlsx' or file_format_lowered == 'excel':
                 df.to_excel(filepath, index=False)
             else:
-                self.logger.warning(f"File format in config is wrong, currently: {file_format_lowered} - Still saving data to {filepath} as .csv")
+                if file_format_lowered != 'csv':
+                    self.logger.warning(f"File format in config is wrong, currently: {file_format_lowered} - Still saving data to {filepath} as .csv")
                 filepath = filepath.replace(f'.{file_format}', '.csv')
                 df.to_csv(filepath, index=False)
                 
@@ -81,7 +207,7 @@ class DataUtils:
         
         self.logger.info(f"Data saved to: {filepath}")
         self.logger.info(f"Total records saved: {len(df)}")
-                
+        
         return filepath
         
     def get_data_summary(
@@ -180,11 +306,11 @@ class DataUtils:
             
             missing_fields = required_fields - set(record.keys())
             if missing_fields:
-                validation_errors.append(f"Record {i}: Missing required fields: {missing_fields}'")
+                validation_errors.append(f"Record {i}: Missing required fields: {missing_fields}")
                 
             for field in required_fields:
                 if field in record and not record[field]:
-                    validation_errors.append(f"Record {i}: Field '{field} is empty")
+                    validation_errors.append(f"Record {i}: Field '{field}' is empty")
                     
             if check_content_quality and 'content' in record:
                 content = record['content']
