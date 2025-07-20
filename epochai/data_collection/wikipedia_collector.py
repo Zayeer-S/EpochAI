@@ -4,10 +4,10 @@ from typing import Optional, List, Dict, Any, Callable
 
 import pandas as pd
 
-from predictai.common.config_loader import ConfigLoader
-from predictai.common.logging_config import setup_logging, get_logger
-from predictai.common.wikipedia_utils import WikipediaUtils
-from predictai.common.data_utils import DataUtils
+from epochai.common.config_loader import ConfigLoader
+from epochai.common.logging_config import setup_logging, get_logger
+from epochai.common.wikipedia_utils import WikipediaUtils
+from epochai.common.data_utils import DataUtils
 
 class WikipediaPoliticalCollector:
     def __init__(self):
