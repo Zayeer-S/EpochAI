@@ -4,7 +4,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 import wikipedia
 
-from predictai.common.logging_config import get_logger
+from epochai.common.logging_config import get_logger
 
 class WikipediaUtils:
     """Shared Wikipedia API Utils across collection and debug files"""

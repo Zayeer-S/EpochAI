@@ -3,7 +3,7 @@ import sys
 import yaml
 from typing import Any, Dict, List
 
-from predictai.common.config_validator import ValidateWholeConfig
+from epochai.common.config_validator import ValidateWholeConfig
 
 if sys.version_info >= (3, 0):
     import locale

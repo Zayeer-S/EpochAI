@@ -1,7 +1,7 @@
 import wikipedia
 
-from predictai.common.config_loader import ConfigLoader
-from predictai.common.wikipedia_utils import WikipediaUtils
+from epochai.common.config_loader import ConfigLoader
+from epochai.common.wikipedia_utils import WikipediaUtils
 
 try:
     all_collector_configs = ConfigLoader.get_all_collector_configs()
