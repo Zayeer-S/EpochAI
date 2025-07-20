@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 import pandas as pd
 from pathlib import Path
 
-from predictai.common.logging_config import get_logger
+from epochai.common.logging_config import get_logger
 
 class DataUtils:
     def __init__(self, config):
