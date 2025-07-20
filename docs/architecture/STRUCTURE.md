@@ -39,7 +39,7 @@ PredictAI/
 │   ├── model_evaluation.ipynb      
 │   └── visualization.ipynb     
 │       
-├── predictai/                          # Main package directory
+├── epochai/                          # Main package directory
 │   ├── __init__.py     
 │   ├── common/                         # Shared utilities
 │   │   ├── __init__.py     
