@@ -32,6 +32,9 @@ PredictAI/
 ├── docs/                               # Documentation
 │   ├── architecture/                   # Architecture diagrams
 │   │   ├── STRUCTURE.md                # File structure
+│   ├── diagrams/                       # Architecture diagrams
+│   │   ├── ERD.drawio.png              # File structure in png format
+│   │   ├── ERD.drawio.xml              # File structure in xml to allow for future editing
 │   └── USER_GUIDE.md
 │
 ├── notebooks/                          # Jupyter notebooks
