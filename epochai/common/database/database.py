@@ -3,7 +3,6 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 from contextlib import contextmanager
 from typing import Any, Dict, List, Optional
-import logging
 
 from epochai.common.logging_config import get_logger
 
