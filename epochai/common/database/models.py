@@ -40,11 +40,7 @@ class CollectionTypes:
         """Creates instance from database row dictionary"""
         return cls(
             id=data.get('id'),
-            collection_name_id=data.get('collector_name_id'),
-            collection_type_id=data.get('collection_type_id'),
-            language_code=data.get('language_code'),
-            collection_name=data.get('collection_name'),
-            is_collected=data.get('is_collected', False),
+            collection_type=data.get('collection_type'),
             updated_at=data.get('updated_at'),
             created_at=data.get('created_at')
         )
@@ -71,13 +67,14 @@ class CollectionConfigs:
             id=data.get('id'),
             collector_name_id=data.get('collector_name_id'),
             collection_type_id=data.get('collection_type_id'),
-            language_codeid=data.get('language_code'),
+            language_code=data.get('language_code'),
             collection_name=data.get('collection_name'),
             is_collected=data.get('is_collected'),
             updated_at=data.get('updated_at'),
             created_at=data.get('created_at')
         )
         
+
 @dataclass
 class CollectionAttempts:
     """collection_attempts table model"""
@@ -85,8 +82,8 @@ class CollectionAttempts:
     collection_config_id: int = 0
     language_code_used: str = ""
     search_term_used: str = ""
-    attempt_status: str = ""
-    error_type: str = ""
+    attempt_status_id: int = 0
+    error_type_id: int = 0
     error_message: str = ""
     created_at: Optional[datetime] = None
     
@@ -101,8 +98,8 @@ class CollectionAttempts:
             collection_config_id=data.get('collection_config_id'),
             language_code_used=data.get('language_code_used'),
             search_term_used=data.get('search_term_used'),
-            attempt_status=data.get('attempt_status'),
-            error_type=data.get('error_type'),
+            attempt_status_id=data.get('attempt_status_id'),
+            error_type_id=data.get('error_type_id'),
             error_message=data.get('error_message'),
             created_at=data.get('created_at')
         )
@@ -132,7 +129,7 @@ class ValidationStatuses:
 class CollectedContentTypes:
     """collected_content_types table model"""
     id: Optional[int] = None
-    collected_content_type_name: str = None
+    collected_content_type_name: str = ""
     updated_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
     
@@ -183,14 +180,14 @@ class CollectedContents:
     id: Optional[int] = None
     collection_attempt_id: int = 0
     content_type_id: int = 0
-    content_meta_data_id: int = 0
+    content_metadata_schema_id: int = 0
     title: str = ''
     main_content: str = ''
     url: Optional[str] = None
     validation_status_id: int = 0
     validation_error: Optional[Dict[str, Any]] = None
     filepath_of_save: str = ''
-    created_at: Optional[datetime]
+    created_at: Optional[datetime] = None
     
     def __post_init__(self):
         if self.validation_error is None:
@@ -295,8 +292,8 @@ class RunCollectionMetadata:
     run_status_id: Optional[int] = 0
     attempts_successful: Optional[int] = 0
     attempts_failed: Optional[int] = 0
-    config_used: Optional[int] = 0
-    completed_at: Optional[int] = 0
+    config_used: Optional[Dict[str, Any]] = None
+    completed_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
     
     @classmethod
@@ -357,7 +354,7 @@ class DebugWikipediaResults:
     
     def __post_init__(self):
         if self.search_results_found is None:
-            self.search_results_found = None
+            self.search_results_found = []
             
     @classmethod
     def from_dict(
