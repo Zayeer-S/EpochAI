@@ -3,6 +3,7 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 from contextlib import contextmanager
 from typing import Any, Dict, List, Optional
+import threading
 
 from epochai.common.logging_config import get_logger
 
@@ -195,12 +196,15 @@ class DatabaseConnection:
             return False
         
 _db_instance = None
+_lock = threading.Lock()
 
 def get_database() -> DatabaseConnection:
     """Gets global database instance via a singleton"""
     global _db_instance
     if _db_instance is None:
-        _db_instance = DatabaseConnection()
+        with _lock:
+            if _db_instance is None:
+                _db_instance = DatabaseConnection()
     return _db_instance
 
 def close_database():
