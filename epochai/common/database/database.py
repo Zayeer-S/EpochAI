@@ -190,6 +190,8 @@ class DatabaseConnection:
                                )
                                """)
                 schema_exists = cursor.fetchone()['exists']
+            
+            return True
                 
         except Exception as general_error:
             self.logger.error(f"Database test failed: {general_error}")
