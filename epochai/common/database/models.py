@@ -74,6 +74,47 @@ class CollectionConfigs:
             created_at=data.get('created_at')
         )
         
+@dataclass
+class AttemptStatuses:
+    """attempt_statuses table model"""
+    id: Optional[int] = None
+    attempt_status_name: str = ""
+    updated_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+    
+    @classmethod
+    def from_dict(
+        cls,
+        data: Dict[str, Any]
+        ) -> 'AttemptStatuses':
+        """Creates instance from database row dictionary"""
+        return cls(
+            id=data.get('id'),
+            attempt_status_name=data.get('attempt_status_name'),
+            updated_at=data.get('updated_at'),
+            created_at=data.get('created_at')
+        )
+    
+@dataclass
+class ErrorTypes:
+    """error_types table model"""
+    id: Optional[int] = None
+    error_type_name: str = ""
+    updated_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+    
+    @classmethod
+    def from_dict(
+        cls,
+        data: Dict[str, Any]
+        ) -> 'ErrorTypes':
+        """Creates instance from database row dictionary"""
+        return cls(
+            id=data.get('id'),
+            error_type_name=data.get('error_type_name'),
+            updated_at=data.get('updated_at'),
+            created_at=data.get('created_at')
+        )
 
 @dataclass
 class CollectionAttempts:
