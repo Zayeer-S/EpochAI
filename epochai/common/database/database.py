@@ -28,6 +28,10 @@ class DatabaseConnection:
             'password': os.getenv('DB_PASSWORD')
         }
         
+        missing_vars = [key for key, value in connection_params.items() if value is None]
+        if missing_vars:
+            raise ValueError(f"Missing required enviroment variables: {missing_vars}")
+        
         self.logger.info(f"Database connection configured for: {connection_params['host']}:{connection_params['port']}:{connection_params['database']}")
         
         return connection_params
@@ -102,7 +106,7 @@ class DatabaseConnection:
             self.logger.error(f"Database operation failed: {general_error}")
             raise
         finally:
-            if cursor():
+            if cursor:
                 cursor.close()
                 
     def execute_select_query(
