@@ -40,7 +40,7 @@ class CollectionConfigsDAO:
             
             if result:
                 self.logger.info(f"Created collection config: '{collection_name}' ({language_code})")
-                return True
+                return result
             else:
                 self.logger.error(f"Failed to create collection config: '{collection_name}' ({language_code})")
                 return None
@@ -117,7 +117,7 @@ class CollectionConfigsDAO:
             SELECT cc.*
             FROM collection_configs cc
             JOIN collection_types ct ON cc.collection_type_id = ct.id
-            WHERE ct.collection_types = %s
+            WHERE ct.collection_type = %s
             AND cc.language_code = %s
             AND cc.is_collected = FALSE
             ORDER BY cc.created_at ASC
@@ -281,7 +281,7 @@ class CollectionConfigsDAO:
                 SUM(CASE WHEN cc.is_collected THEN 1 ELSE 0 END) as collected_count,
                 SUM(CASE WHEN NOT cc.is_collected THEN 1 ELSE 0 END) as uncollected_count
             FROM collection_configs cc
-            JOIN collection_type ct ON cc.collection_type_id = ct.id
+            JOIN collection_types ct ON cc.collection_type_id = ct.id
             GROUP BY ct.collection_type, cc.language_code
             ORDER BY ct.collection_type, cc.language_code
         """
@@ -295,8 +295,8 @@ class CollectionConfigsDAO:
             }
             
             total_configs = sum(row['total_configs'] for row in results)
-            total_collected = sum(row['total_collected'] for row in results)
-            total_uncollected = sum(row['total_uncollected'] for row in results)
+            total_collected = sum(row['collected_count'] for row in results)
+            total_uncollected = sum(row['uncollected_count'] for row in results)
         
             stats['summary'] = {
                 'total_configs': total_configs,
@@ -309,7 +309,7 @@ class CollectionConfigsDAO:
         
         except Exception as general_error:
             self.logger.error(f"Error getting collection stats: {general_error}")
-            return {'by_type_and_language', 'summary'}
+            return {'by_type_and_language': [], 'summary': {}}
         
     def delete_config(
         self,
@@ -342,12 +342,12 @@ class CollectionConfigsDAO:
         """Search configs by collection name"""
         
         query = """
-            SELECT * collection_configs WHERE collection_name ILIKE %s ORDER BY collection_name
+            SELECT * FROM collection_configs WHERE collection_name ILIKE %s ORDER BY collection_name
         """
         
         try:
             search_pattern = f"%{search_term}%"
-            results = self.db.execute_select_query(query, search_pattern)
+            results = self.db.execute_select_query(query, (search_pattern,))
             return [CollectionConfigs.from_dict(row) for row in results]
         
         except Exception as general_error:
@@ -364,7 +364,7 @@ class CollectionConfigsDAO:
         query = """
             SELECT cc.*
             FROM collection_configs cc
-            JOIN collection_names cc ON cc.collector_name_id = cn.id
+            JOIN collector_names cn ON cc.collector_name_id = cn.id
             JOIN collection_types ct ON cc.collection_type_id = ct.id
             WHERE cn.collector_name = %s AND ct.collection_type = %s
             ORDER BY cc.language_code, cc.collection_name
