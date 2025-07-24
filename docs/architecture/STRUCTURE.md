@@ -42,11 +42,31 @@ PredictAI/
 │   ├── model_evaluation.ipynb      
 │   └── visualization.ipynb     
 │       
-├── epochai/                          # Main package directory
+├── epochai/                            # Main package directory
 │   ├── __init__.py     
 │   ├── common/                         # Shared utilities
-│   │   ├── __init__.py     
-│   │   ├── config_loader.py            # Loads config.yml and calls config_validator.py
+│   │   ├── __init__.py
+│   │   ├── database/                   # Everything database related
+│   │   │   ├── __init__.py
+│   │   │   ├── database.py             # Sets up database connection and has functions to access CRUD queries
+│   │   │   ├── models.py               # Sets up models for the database
+│   │   ├── dao/                        # 
+│   │   │   ├── attempt_status_dao.py
+│   │   │   ├── collected_content_metadata_dao.py
+│   │   │   ├── collected_content_types_dao.py
+│   │   │   ├── collection_attempts_dao.py
+│   │   │   ├── collection_configs_dao.py
+│   │   │   ├── collection_types_dao.py
+│   │   │   ├── collector_names_dao.py
+│   │   │   ├── content_metadata_schemas_dao.py
+│   │   │   ├── debug_wikipedia_results_dao.py
+│   │   │   ├── error_types_dao.py
+│   │   │   ├── link_attempts_to_runs_dao.py
+│   │   │   ├── run_collection_metadata_dao.py
+│   │   │   ├── run_statuses_dao.py
+│   │   │   ├── run_types_dao.py
+│   │   │   └── validation_statuses_dao.py
+│   │   ├── config_loader.py            # Loads config.yml and validates by calling config_validator.py
 │   │   ├── config_validator.py         # Validates config and returns error messages if invalid
 │   │   ├── data_utils.py               # Shared data processing functions
 │   │   ├── evaluation.py               # Model evaluation metrics
