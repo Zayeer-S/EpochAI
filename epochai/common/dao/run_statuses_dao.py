@@ -65,7 +65,7 @@ class RunStatusesDAO:
         """Gets run status by name"""
         
         query = """
-            SELECT * FROM run_status WHERE run_status_name = %s
+            SELECT * FROM run_statuses WHERE run_status_name = %s
         """
         
         try:
