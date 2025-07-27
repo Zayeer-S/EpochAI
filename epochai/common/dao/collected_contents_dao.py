@@ -109,7 +109,7 @@ class CollectedContentsDAO:
         """Gets all contents for a specific collection attempt"""
         
         query = """
-            SELECT" * FROM collected_contents WHERE collection_attempt_id = %s ORDER BY created_at DESC
+            SELECT * FROM collected_contents WHERE collection_attempt_id = %s ORDER BY created_at DESC
         """
         
         try:
