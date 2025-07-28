@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple 
 
 from epochai.common.database.database import get_database
-from epochai.common.dao.track_schema_migrations_dao import TrackSchemaMigrationsDAO
+from epochai.common.database.dao.track_schema_migrations_dao import TrackSchemaMigrationsDAO
 from epochai.common.logging_config import get_logger
 
 class MigrationRunner:
