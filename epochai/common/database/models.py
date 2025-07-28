@@ -421,3 +421,20 @@ class DebugWikipediaResults:
             test_duration=data.get('test_duration'),
             created_at=data.get('created_at')
         )
+        
+@dataclass
+class TrackSchemaMigrations:
+    id: int
+    version: str
+    filename: str
+    checksum: Optional[str]
+    executed_at: datetime
+    execution_time_ms: float
+    status: str
+    error_message: Optional[str]
+    rolled_back_at: Optional[datetime]
+    created_at: datetime
+    
+    @classmethod
+    def from_dict(cls, data: dict) -> "TrackSchemaMigrations":
+        return cls(**data)
