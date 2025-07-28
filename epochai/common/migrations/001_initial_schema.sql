@@ -146,6 +146,18 @@ CREATE TABLE IF NOT EXISTS link_attempts_to_runs (
     CONSTRAINT unique_attempt_to_runs UNIQUE (collection_attempt_id, run_collection_metadata_id)
 );
 
+CREATE TABLE IF NOT EXISTS schema_migrations (
+    id SERIAL PRIMARY KEY,
+    version TEXT NOT NULL UNIQUE,
+    filename TEXT NOT NULL,
+    checksum TEXT,
+    executed_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    execution_time_seconds DECIMAL(10,3) NOT NULL,
+    status TEXT NOT NULL,
+    error_message TEXT,
+    rolled_back_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
 
 
 -- INDEX TIME
@@ -176,6 +188,10 @@ CREATE INDEX IF NOT EXISTS idx_run_collection_metadata_created_at ON run_collect
 
 CREATE INDEX IF NOT EXISTS idx_link_attempts_to_runs_collection_attempt_id ON link_attempts_to_runs(collection_attempt_id);
 CREATE INDEX IF NOT EXISTS idx_link_attempts_to_runs_run_collection_metadata_id ON link_attempts_to_runs(run_collection_metadata_id);
+
+CREATE INDEX IF NOT EXISTS idx_schema_migrations_version ON schema_migrations(version);
+CREATE INDEX IF NOT EXISTS idx_schema_migrations_status ON schema_migrations(status);
+CREATE INDEX IF NOT EXISTS idx_schema_migrations_executed_at ON schema_migrations(executed_at);
 
 
 
