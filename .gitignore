@@ -33,3 +33,8 @@ logs/*
 # IDE
 .idea/
 vscode/
+
+# Migrations
+epochai/common/migrations/*
+!epochai/common/migrations/001_initial_schema.sql
+!epochai/common/migrations/migration_runner.py
