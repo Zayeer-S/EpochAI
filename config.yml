@@ -12,8 +12,8 @@ data_settings:
     separate_files_by_year: false
     file_format: "csv"
 
-    incremental_saving:
-      enabled: True
+    database:
+      save_to_database: true # True = Save to database incrementally. False = Save to file at end
       batch_size: 10
 
   data_validator: 
