@@ -7,7 +7,7 @@ import pandas as pd
 from epochai.common.config_loader import ConfigLoader
 from epochai.common.logging_config import setup_logging, get_logger
 from epochai.common.wikipedia_utils import WikipediaUtils
-from epochai.common.data_utils import DataUtils
+from epochai.database_savers.wikipedia_saver import WikipediaSaver
 
 class WikipediaPoliticalCollector:
     def __init__(self):
@@ -24,17 +24,22 @@ class WikipediaPoliticalCollector:
         
         self.config = ConfigLoader.get_wikipedia_collector_config()
         self.languages = self.config['api']['language']
-        self.collected_data = []
         
         self.wiki_utils = WikipediaUtils(self.config)
         
         self.data_config = ConfigLoader.get_data_config()
-        self.data_utils = DataUtils(self.data_config)
+        self.wikipedia_saver = WikipediaSaver()
         
-        self.incremental_saving_enabled = self.data_config.get('data_output').get('incremental_saving').get('enabled')
-        self.batch_size = self.data_config.get('data_output').get('incremental_saving').get('batch_size')
-        self.current_batch = []
-        self.total_saved = 0
+        self.save_to_database = self.data_config.get('data_output').get('database').get('save_to_database')
+        
+        if self.save_to_database:
+            self.batch_size = self.data_config.get('data_output').get('database').get('batch_size')
+            self.current_batch = []
+            self.total_saved_to_db = 0
+        else:
+            self.collected_data = []
+            
+        self.current_language_code = ''
         
     def _handle_all_wikipedia_collection(
         self,
@@ -67,8 +72,8 @@ class WikipediaPoliticalCollector:
             if page:
                 self.logger.debug(f"Successfully collected ({language_code}): {item}")
                 
-                if self.incremental_saving_enabled:
-                    self._add_to_batch([page])
+                if self.save_to_database:
+                    self._add_to_batch([page], language_code)
             else:
                 self.logger.warning(f"Nothing collected for ({language_code}): {item}")
                 
@@ -88,10 +93,11 @@ class WikipediaPoliticalCollector:
     
     def _add_to_batch(
         self,
-        data_items: List[Dict[str, Any]]
+        data_items: List[Dict[str, Any]],
+        language_code: str
     ):
         """Adds data to current collection batch and saves via helper function if batch size is reached"""
-        if not self.incremental_saving_enabled:
+        if not self.save_to_database:
             self.collected_data.extend(data_items)
             return
         
@@ -99,25 +105,27 @@ class WikipediaPoliticalCollector:
             self.current_batch.append(item)
             
             if len(self.current_batch) >= self.batch_size:
-                self._save_batch_if_needed()
+                self._save_batch_if_needed(language_code)
                 
     def _save_batch_if_needed(
-        self
+        self,
+        language_code: str
     ):
         """Saves current batch using DataUtils and resets batch"""
         if not self.current_batch:
             return
         
-        data_type = self.data_config['data_output']['default_type_wikipedia']
+        config_id = 1 ## TODO GET THIS DYNAMICALLY VIA FINDING CLOSEST MATCH TO collector_name_id IN collection_configs
         
-        filepath = self.data_utils.save_incrementally(
+        success_count = self.wikipedia_saver.save_incrementally_to_database(
             collected_data=self.current_batch,
-            data_type=data_type
+            config_id=config_id,
+            language_code=language_code
         )
         
-        if filepath:
-            self.total_saved += len(self.current_batch)
-            self.logger.info(f"Saved branch. Total articles saved until now: {self.total_saved}")
+        if success_count >= 0:
+            self.total_saved_to_db += len(self.current_batch)
+            self.logger.info(f"Saved branch. Total articles saved until now: {self.total_saved_to_db}")
             
         self.current_batch = []
     
@@ -286,18 +294,18 @@ def main():
     if all_political_data:
         data_type = collector.data_config['data_output']['default_type_wikipedia']
         
-        if collector.incremental_saving_enabled:
+        if collector.save_to_database:
             # Save anything left in the batch
             if collector.current_batch:
                 collector._save_batch_if_needed()
-            collector.logger.info(f"All data saved incrementally. Total: {collector.total_saved}")
+            collector.logger.info(f"All data saved incrementally. Total: {collector.total_saved_to_db}")
         else:
-            collector.data_utils.save_at_end(
+            collector.wikipedia_saver.save_locally_at_end(
                 collected_data=all_political_data,
                 data_type=data_type
             )
         
-        collector.data_utils.log_data_summary(all_political_data)
+        collector.wikipedia_saver.log_data_summary(all_political_data)
         
     if not all_political_data:
         collector.logger.warning("No data collected. Unknown reason.")
