@@ -11,18 +11,18 @@ class ConfigValidator:
         from epochai.common.config_loader import ConfigLoader
         return ConfigLoader.load_constraints_config()
     
-class IncrementalSavingConfig(BaseModel):
-    enabled: bool
+class DatabaseConfig(BaseModel):
+    save_to_database: bool
     batch_size: int
     
     @model_validator(mode='after')
     def validate_using_constraints(self):
         constraints_config = ConfigValidator._get_constraints_config()
         
-        incremental_saving_config = constraints_config['data_output']['incremental_saving']
+        save_to_database = constraints_config['data_output']['save_to_database']
         
-        min_batch_size = incremental_saving_config['min_batch_size']
-        max_batch_size = incremental_saving_config['max_batch_size']
+        min_batch_size = save_to_database['min_batch_size']
+        max_batch_size = save_to_database['max_batch_size']
         
         if not (min_batch_size <= self.batch_size <= max_batch_size):
             raise ValueError(f"batch_size currently {self.batch_size}, must be: {min_batch_size} <= batch_size <= {max_batch_size}")
@@ -34,7 +34,7 @@ class DataOutputConfig(BaseModel):
     default_type_wikipedia: str
     separate_files_by_year: bool    
     file_format: str
-    incremental_saving: IncrementalSavingConfig
+    database: DatabaseConfig
     
     @model_validator(mode='after')
     def validate_using_constraints(self):
