@@ -43,33 +43,6 @@ defaults:
 
 # wikipedia_collector.py configuration
 wikipedia:
-  collection_years: [2023]
-
-  politicians:
-    en:
-      - "Donald Trump Jr."
-      - "Sir Keir Starmer"
-      - "Emmanuel Macron"
-
-    fr:
-      - "Présidence d'Emmanuel Macron"
-
-  political_topics:
-    en:
-      - "2024 United States presidential election"
-      - "United Kingdom general election 2024"
-      - "2024 French legislative election"
-
-    fr:
-      - "Élections législatives françaises de 2024"
-
-  political_events_template:
-    en:
-      - "{year} in politics"
-
-    fr:
-      - "{year} en politique"
-  
   api:
     language: ["en", "fr"]
     rate_limit_delay: 0.5
