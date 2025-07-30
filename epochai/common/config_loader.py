@@ -3,6 +3,7 @@ import sys
 import yaml
 from typing import Any, Dict
 from epochai.common.config_validator import ValidateWholeConfig
+from epochai.common.database.collection_config_manager import CollectionConfigManager
 
 
 if sys.version_info >= (3, 0):
@@ -133,7 +134,7 @@ class ConfigLoader:
         return data_settings_config
     
     @staticmethod
-    def get_wikipedia_collector_yaml_config():
+    def get_wikipedia_yaml_config():
         """Gets Wikipedia collector (YAML only) configuration with defaults applied and validates it"""
         config = ConfigLoader.load_the_config()
         
@@ -160,9 +161,19 @@ class ConfigLoader:
         all_configs = {}
         
         try:
-            all_configs['wikipedia'] = ConfigLoader.get_wikipedia_collector_yaml_config()
+            all_configs['wikipedia'] = CollectionConfigManager.get_combined_wikipedia_config()
         except Exception as e:
             print(f"Could not load wikipedia collector: '{e}'")
             all_configs['wikipedia'] = None
             
         return all_configs
+    
+    @staticmethod
+    def get_whole_wikipedia_config() -> Dict[str, Any]:
+        """Gets whole Wikipedia Config (combination of YAML + DB) and returns it"""
+        return CollectionConfigManager.get_combined_wikipedia_config()
+    
+    @staticmethod
+    def get_collection_status_summary() -> Dict[str, Any]:
+        """Gets collection status summary"""
+        return CollectionConfigManager.get_collection_configs_from_database()

@@ -1,6 +1,5 @@
 from typing import Any, Dict, List, Optional
 
-from epochai.common.config_loader import ConfigLoader
 from epochai.common.database.database import get_database
 from epochai.common.database.dao.collection_configs_dao import CollectionConfigsDAO
 from epochai.common.database.dao.collector_names_dao import CollectorNamesDAO
@@ -214,7 +213,10 @@ class CollectionConfigManager:
         """Gets combined wikipedia config from database and config.yml"""
         
         try:
-            yaml_config = ConfigLoader.get_wikipedia_collector_yaml_config()
+            
+            from epochai.common.config_loader import ConfigLoader
+            
+            yaml_config = ConfigLoader.get_wikipedia_yaml_config()
             
             db_configs = cls.get_collection_configs_from_database(
                 collector_name="wikipedia_collector"
@@ -233,12 +235,14 @@ class CollectionConfigManager:
                 'last_updated': 'from_database'
             }
             
-            cls._logger.info(f"Successfully combined YAML and Database configurations")
+            if cls._logger:
+                cls._logger.info(f"Successfully combined YAML and Database configurations")
             return combined_config
         
         except Exception as general_error:
-            cls._logger.error(f"Error getting combined Wikipedia config: {general_error} - falling back to YAML only")
-            return ConfigLoader.get_wikipedia_collector_yaml_config()
+            if cls._logger:
+                cls._logger.error(f"Error getting combined Wikipedia config: {general_error} - falling back to YAML only")
+            return ConfigLoader.get_wikipedia_yaml_config()
     
     @classmethod    
     def test_database_connection(cls) -> bool:
@@ -248,5 +252,6 @@ class CollectionConfigManager:
             cls._lazy_database_init()
             return cls._db_connection.test_connection()
         except Exception as general_error:
-            cls._logger.error(f"Database connection test failed: {general_error}")
+            if cls._logger:
+                cls._logger.error(f"Database connection test failed: {general_error}")
             return False
