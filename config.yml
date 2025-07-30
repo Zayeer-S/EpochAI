@@ -28,7 +28,9 @@ data_settings:
 # Default setup for collectors
 defaults:
   wikipedia:
-    collection_years: [2023]
+    collector_name: "wikipedia_collector"
+
+    collection_years: []
     politicians: []
     political_topics: []
     political_events_template: ["{year} in politics"] ## This becomes e.g. "2023 in politics"
@@ -43,6 +45,8 @@ defaults:
 
 # wikipedia_collector.py configuration
 wikipedia:
+  collector_name: "wikipedia_collector"
+
   api:
     language: ["en", "fr"]
     rate_limit_delay: 0.5
