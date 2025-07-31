@@ -13,6 +13,7 @@ class CollectionConfigManager:
     _collector_names_dao = None
     _collection_types_dao = None
     _logger = None
+    _collector_name = None # Set by config loader
     
     @classmethod
     def _lazy_database_init(cls):
@@ -28,17 +29,28 @@ class CollectionConfigManager:
                 cls._logger.error(f"Failed to initialize the database components: {general_error}")
                 raise
     
+    @classmethod
+    def set_collector_name(
+        cls,
+        collector_name: str = None
+        ):
+        cls._collector_name = collector_name
+    
     @classmethod    
     def get_collection_configs_from_database(
         cls,
-        collector_name: str = "wikipedia_collector",
+        collector_name: str = _collector_name,
         collection_type: Optional[str] = None,
         language_code: Optional[str] = None,
         is_collected: Optional[bool] = None
     ) -> Dict[str, Any]:
-        """Gets collection configurations from database"""
+        """Gets collection configurations from database"""  
         
         cls._lazy_database_init()
+        
+        if collector_name is None:
+            cls._logger.error(f"Error, cls._collector_name is null")
+            raise
         
         try:
             # Directly get uncollected if we have collection_type and language_code
@@ -94,8 +106,7 @@ class CollectionConfigManager:
     @classmethod    
     def get_uncollected_configs_by_type(
         cls,
-        collection_type: str,
-        collector_name: str = "wikipedia_collector"
+        collection_type: str
     ) ->  Dict[str, List[Dict[str, Any]]]:
         """Gets uncollected configs of a specific type  for a specific collector, grouped by language"""
         
@@ -209,18 +220,28 @@ class CollectionConfigManager:
             return []
        
     @classmethod    
-    def get_combined_wikipedia_config(cls) -> Dict[str, Any]:
-        """Gets combined wikipedia config from database and config.yml"""
+    def get_combined_wikipedia_config(
+        cls,
+        collector_name: str = None
+        ) -> Dict[str, Any]:
+        """
+        Gets combined wikipedia config from database and config.yml
+        
+        Note:
+            Falls back to YAML only config if combining fails
+        """
         
         try:
+            if collector_name is None:
+                collector_name = cls._collector_name
+            elif collector_name is not None:
+                cls.set_collector_name(collector_name)
             
             from epochai.common.config_loader import ConfigLoader
             
             yaml_config = ConfigLoader.get_wikipedia_yaml_config()
             
-            db_configs = cls.get_collection_configs_from_database(
-                collector_name="wikipedia_collector"
-            )
+            db_configs = cls.get_collection_configs_from_database(collector_name=collector_name)
             
             combined_config = yaml_config.copy()
             
