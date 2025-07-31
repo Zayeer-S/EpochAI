@@ -48,11 +48,11 @@ class WikipediaSaver:
     def save_incrementally_to_database(
         self,
         collected_data: List[Dict[str, Any]],
-        config_id: int,
+        collection_config_id: int,
         language_code: str
     ) -> Optional[int]:
        
-        self.logger.info(f"Saving {len(collected_data)} Wikipedia articles to database for config {config_id}...")
+        self.logger.info(f"Saving {len(collected_data)} Wikipedia articles to database for config {collection_config_id}...")
         
         success_count = 0
         
@@ -67,7 +67,7 @@ class WikipediaSaver:
             
             try:
                 attempt_id = self.collection_attempts_dao.create_attempt(
-                    collection_config_id=config_id,
+                    collection_config_id=collection_config_id,
                     language_code_used=language_code,
                     search_term_used=title,
                     attempt_status_id=self.ATTEMPT_STATUS_ID,

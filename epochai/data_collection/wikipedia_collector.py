@@ -115,11 +115,11 @@ class WikipediaPoliticalCollector:
         if not self.current_batch:
             return
         
-        config_id = 1 ## TODO GET THIS DYNAMICALLY VIA FINDING CLOSEST MATCH TO collector_name_id IN collection_configs
+        collection_config_id = 1 ## TODO GET THIS DYNAMICALLY VIA FINDING CLOSEST MATCH TO collector_name_id IN collection_configs
         
         success_count = self.wikipedia_saver.save_incrementally_to_database(
             collected_data=self.current_batch,
-            config_id=config_id,
+            collection_config_id=collection_config_id,
             language_code=language_code
         )
         
