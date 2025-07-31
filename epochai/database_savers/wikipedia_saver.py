@@ -3,6 +3,7 @@ from typing import Any, Dict, List, Optional
 from epochai.common.logging_config import get_logger
 from epochai.common.database.dao.collection_attempts_dao import CollectionAttemptsDAO
 from epochai.common.database.dao.collected_contents_dao import CollectedContentsDAO
+from epochai.common.database.dao.collection_configs_dao import CollectionConfigsDAO
 from epochai.common.data_utils import DataUtils
 from epochai.common.config_loader import ConfigLoader
 
@@ -19,6 +20,7 @@ class WikipediaSaver:
             if self.save_to_database:
                 self.collection_attempts_dao = CollectionAttemptsDAO()
                 self.collected_contents_dao = CollectedContentsDAO()
+                self.collection_configs_dao = CollectionConfigsDAO()
                 
                 self.CONTENT_TYPE_ID = 1
                 self.ATTEMPT_STATUS_ID = 1
@@ -106,3 +108,27 @@ class WikipediaSaver:
         collected_data: List[Dict[str, Any]]
     ) -> None:
         self.data_utils.log_data_summary(collected_data)
+        
+    def get_collection_config_id(
+        self,
+        collection_type: str,
+        language_code: str,
+        collection_name: str
+    ) -> Optional[int]:
+        """Gets the collection_config_id for the current collection"""
+        try:
+            configs = self.collection_configs_dao.get_uncollected_by_type_and_language(
+                collection_type, language_code
+            )
+            
+            for config in configs:
+                if config.collection_name == collection_name:
+                    self.logger.debug(f"Found exact config match id {config.id}")
+                    return config.id
+                    
+            self.logger.warning(f"No existing config found for '{collection_name}'")
+            return None
+        
+        except Exception as e:
+            self.logger.error(f"Error getting collection config id: {e}")
+            return None
