@@ -43,7 +43,7 @@ defaults:
       request_timeout: 30
       recursive_limit: 1 
 
-# wikipedia_collector.py configuration
+# Fine tune Wikipedia API config settings
 wikipedia:
   collector_name: "wikipedia_collector"
 
