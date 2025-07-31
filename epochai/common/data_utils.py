@@ -26,7 +26,7 @@ class DataUtils:
         except Exception as general_error:
             self.logger.error(f"General Error: {general_error}")
             
-    def _save_common(
+    def _get_save_variables(
     self,
     collected_data: List[Dict[str, Any]],
     data_type: str,
@@ -36,7 +36,7 @@ class DataUtils:
     incremental_saving: bool = None
     ) -> Optional[Tuple[str, str, bool]]:
         """
-        Common functionalities both incremental and at end save use
+        Various checks that save_at_end needs, done here due to seperation of concerns
         
         Notes:
             Checks if there is collected_data and validates it, gets config values
@@ -88,16 +88,16 @@ class DataUtils:
             filepath (str) of the file where the save occurred
             
         Note:
-            Use this for small collections. Fails gracefully!
+            Use this for small collections. Fails gracefully at end
         """
         self.logger.info("Starting save attempt")
         
-        result = self._save_common(
+        result = self._get_save_variables(
             collected_data,
             data_type,
         )
         if result is None:
-            self.logger.error(f"{self._save_common.__name__} is returning None")
+            self.logger.error(f"{self._get_save_variables.__name__} is returning None")
             return None
         
         file_format, filepath, incremental_saving = result
