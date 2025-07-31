@@ -71,7 +71,7 @@ class ConfigLoader:
         return config
         
     @staticmethod
-    def load_constraints_config():
+    def load_constraints_config() -> Dict[str, Any]:
         """Loads the constraints config"""
         current_dir = os.path.dirname(__file__)
         project_root = os.path.abspath(os.path.join(current_dir, '..', '..'))
@@ -107,7 +107,7 @@ class ConfigLoader:
         return merged_config
 
     @staticmethod
-    def override_default_config_values(defaults, overrides):
+    def override_default_config_values(defaults, overrides) -> Dict[str, Any]:
         """Recursively merges two dictionaries (default and specific) from config.yml"""
         
         if not isinstance(defaults, dict) or not isinstance(overrides, dict):
@@ -124,7 +124,8 @@ class ConfigLoader:
         return result
     
     @staticmethod
-    def get_data_config():
+    def get_data_config() -> Dict[str, Any]:
+        """Gets just the YAML data_settings portion of the config"""
         whole_config = ConfigLoader.load_the_config()
         
         data_settings_config = whole_config.get('data_settings', {})
@@ -132,7 +133,7 @@ class ConfigLoader:
         return data_settings_config
     
     @staticmethod
-    def get_wikipedia_yaml_config():
+    def get_wikipedia_yaml_config() -> Dict[str, Any]:
         """Gets Wikipedia collector (YAML only) configuration with defaults applied and validates it"""
         config = ConfigLoader.load_the_config()
         
@@ -141,7 +142,7 @@ class ConfigLoader:
         return merged_config
         
     @staticmethod
-    def get_logging_config():
+    def get_logging_config() -> Dict[str, Any]:
         """Get logging configuration and validate it"""
         config = ConfigLoader.load_the_config()
         logging_config = config.get('logging', {
@@ -153,7 +154,7 @@ class ConfigLoader:
         return logging_config
     
     @staticmethod
-    def get_all_collector_configs():
+    def get_all_collector_configs() -> Dict[str, Any]:
         """Gets all collector configs"""
         
         all_configs = {}
