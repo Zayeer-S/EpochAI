@@ -171,7 +171,7 @@ class ConfigLoader:
         return all_configs
     
     @staticmethod
-    def get_whole_wikipedia_config() -> Dict[str, Any]:
+    def get_wikipedia_config() -> Dict[str, Any]:
         """Gets whole Wikipedia Config (combination of YAML + DB) and returns it"""
         wikipedia_yaml_config = ConfigLoader.get_wikipedia_yaml_config()
         collector_name = wikipedia_yaml_config['collector_name']
