@@ -22,7 +22,7 @@ class WikipediaPoliticalCollector:
         self.logger = get_logger(__name__)
         self.logger.info("Initialising WikipediaPoliticalCollector")
         
-        self.config = ConfigLoader.get_wikipedia_collector_config()
+        self.config = ConfigLoader.get_wikipedia_config()
         self.languages = self.config['api']['language']
         
         self.wiki_utils = WikipediaUtils(self.config)
@@ -219,44 +219,6 @@ class WikipediaPoliticalCollector:
         except Exception as e:
             self.logger.error(f"Search error in '{language_code}': {e}")
             return []
-        
-    """def save_data(
-        self, 
-        data: List[Dict[str, Any]], 
-        filename: Optional[str] = None,
-        data_type: str ="political_data"
-        ) -> Optional[str]:
-        Saves the collected data
-        
-        Returns:
-            "filepath" if successful, "None" if there is no data to save
-        
-        if not data:
-            self.logger.warning("No data collected to save")
-            return None
-        
-        df = pd.DataFrame(data)
-        
-        if filename is None:
-            current_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            filename = f"wikipedia_{data_type}_{current_timestamp}.csv"
-            
-        output_dir = self.config['data_output']['directory']
-        os.makedirs(output_dir, exist_ok=True)
-        
-        filepath = os.path.join(output_dir, filename)
-        df.to_csv(filepath, index=False)
-        
-        self.logger.info(f"Data saved to following file path: {filepath}")
-        self.logger.info(f"Total records saved: {len(df)}")
-        
-        if 'language' in df.columns:
-            language_counts = df['language'].value_counts()
-            self.logger.info(f"Records by language:")
-            for language, count in language_counts.items():
-                self.logger.info(f"{language}: {count} records")
-        
-        return filepath"""
     
     def wikipedia_political_data_orchestrator(self):
         """Collect political data from multiple sources."""
