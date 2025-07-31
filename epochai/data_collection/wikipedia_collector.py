@@ -4,7 +4,6 @@ from epochai.common.config_loader import ConfigLoader
 from epochai.common.logging_config import setup_logging, get_logger
 from epochai.common.wikipedia_utils import WikipediaUtils
 from epochai.database_savers.wikipedia_saver import WikipediaSaver
-from epochai.common.database.dao.collection_configs_dao import CollectionConfigsDAO
 
 class WikipediaPoliticalCollector:
     def __init__(self):
@@ -30,7 +29,6 @@ class WikipediaPoliticalCollector:
         self.save_to_database = self.data_config.get('data_output').get('database').get('save_to_database')
         
         if self.save_to_database:
-            self.collection_configs_dao = CollectionConfigsDAO()
             self.batch_size = self.data_config.get('data_output').get('database').get('batch_size')
             self.current_batch = []
             self.total_saved_to_db = 0
@@ -40,33 +38,6 @@ class WikipediaPoliticalCollector:
         self.current_language_code = ''
         self.current_collection_type = None
         self.current_collection_name = None
-        
-    def _get_collection_config_id(
-        self,
-        collection_type: str,
-        language_code: str,
-        collection_name: str
-    ) -> Optional[int]:
-        """
-        Gets the collection_config_id for the current collection and returns it (if found, None if not found)
-        """
-        
-        try:
-            configs = self.collection_configs_dao.get_uncollected_by_type_and_language(
-                collection_type, language_code
-            )
-            
-            for config in configs:
-                if config.collection_name == collection_name:
-                    self.logger.debug(f"Found exact config match id {config.id} ({collection_type}, {language_code})")
-                    return config.id
-                
-            self.logger.warning(f"No existing config found for '{collection_name}' ({collection_type}, {language_code}). Might be missing from the database")
-            return None
-        
-        except Exception as general_error:
-            self.logger.error(f"Error getting collection config id for '{collection_name}' ({collection_type}, {language_code}): {general_error}")
-            return None
         
     def _handle_all_wikipedia_collection(
         self,
@@ -109,7 +80,7 @@ class WikipediaPoliticalCollector:
                 self.logger.debug(f"Successfully collected ({language_code}): {item}")
                 
                 if self.save_to_database:
-                    collection_config_id = self._get_collection_config_id(
+                    collection_config_id = self.wikipedia_saver.get_collection_config_id(
                         collection_type, language_code, item
                     )
                     if collection_config_id:
