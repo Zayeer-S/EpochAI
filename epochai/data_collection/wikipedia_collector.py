@@ -182,38 +182,6 @@ class WikipediaPoliticalCollector:
         self.logger.info(f"Saving last items of this batch due to topic change or reaching the end")
         self._save_current_batch()
         
-    """def collect_political_events_for_years(self, years=None):
-        "Collect yearly political event summaries from Wikipedia (e.g. "2023 in Politics" Page)."
-        if years is None:
-            years = self.config['collection_years']
-            
-        events_to_collect = {}
-        
-        templates = self.config["political_events_template"]
-        
-        for language, template_list in templates.items():
-            events_to_collect[language] = []
-            for year in years:
-                for template in template_list:
-                    events_to_collect[language].append(template.format(year=year))    
-                
-        self.logger.info(f"Collecting political events for years: {years}")
-        
-        def extract_year_from_title(event_title):
-            "
-            Extract year from the political events' title (e.g. get 2023 from "2023 in Politics") and attachess it as metadata.
-            "
-            for year_val in years:
-                if str(year_val) in event_title:
-                    return{'event_year': year_val}
-            return {'event_year': 'unknown'}
-        
-        return self._handle_all_wikipedia_collection(
-            events_to_collect,
-            "political_events",
-            extra_data_func=extract_year_from_title
-        )"""
-    
     def collect_politician_pages(self):
         """Collects specific politician pages from wikipedia."""
         def add_politician_metadata(politician_name):
