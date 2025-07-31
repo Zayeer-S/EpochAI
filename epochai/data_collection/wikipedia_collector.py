@@ -105,7 +105,13 @@ class WikipediaPoliticalCollector:
                 self.logger.debug(f"Successfully collected ({language_code}): {item}")
                 
                 if self.save_to_database:
-                    self._add_to_batch([page], language_code, item)
+                    collection_config_id = self._get_collection_config_id(
+                        collection_type, language_code, item
+                    )
+                    if collection_config_id:
+                        self._add_to_batch(page, collection_config_id)
+                    else:
+                        self.logger.error(f"Skipping save for '{item}' as no collection_config_id found")
             else:
                 self.logger.warning(f"Nothing collected for ({language_code}): {item}")
                 
@@ -128,62 +134,53 @@ class WikipediaPoliticalCollector:
     
     def _add_to_batch(
         self,
-        data_items: List[Dict[str, Any]],
-        language_code: str,
-        collection_name: str
+        item_data: Dict[str, Any],
+        collection_config_id: int
     ):
-        """Adds data to current collection batch and saves via helper function if batch size is reached"""
+        """Adds a single item with its collection_config_id to the batch"""
         if not self.save_to_database:
-            self.collected_data.extend(data_items)
+            self.collected_data.append(item_data)
             return
         
-        for item in data_items:
-            self.current_batch.append(item)
-            
-            if len(self.current_batch) >= self.batch_size:
-                self._save_batch_if_needed(language_code, collection_name)
+        self.current_batch.append((item_data, collection_config_id))
+        
+        if len(self.current_batch) >= self.batch_size:
+            self._save_current_batch()
                 
-    def _save_batch_if_needed(
-        self,
-        language_code: str,
-        collection_name: str
-    ):
+    def _save_current_batch(self):
         """Saves current batch using DataUtils and resets batch"""
         if not self.current_batch:
             return
         
-        collection_config_id = self._get_collection_config_id(
-            self.current_collection_type,
-            language_code,
-            collection_name
-        )
-        
-        if collection_config_id is None:
-            self.logger.error(f"Could not determine collection_config_id for '{collection_name}' ({self.current_collection_type}, {language_code}). Skipping batch save...")
-            self.current_batch = []
-            return 
-        
-        success_count = self.wikipedia_saver.save_incrementally_to_database(
-            collected_data=self.current_batch,
-            collection_config_id=collection_config_id,
-            language_code=language_code
-        )
-        
-        if success_count >= 0:
-            self.total_saved_to_db += len(self.current_batch)
-            self.logger.info(f"Saved batch. Total articles saved until now: {self.total_saved_to_db}")
+        items_by_config_id = {}
+        for item_data, collection_config_id in self.current_batch:
+            if collection_config_id not in items_by_config_id:
+                items_by_config_id[collection_config_id] = []
+            items_by_config_id[collection_config_id].append(item_data)
             
-        self.current_batch = []
+        total_saved_in_batch = 0
+        for collection_config_id, items in items_by_config_id.items():
+            success_count = self.wikipedia_saver.save_incrementally_to_database(
+                collected_data=items,
+                collection_config_id=collection_config_id,
+                language_code=self.current_language_code
+            )
+            
+            if success_count >= 0:
+                total_saved_in_batch += len(items)
+                self.logger.debug(f"Saved {len(items)} item with collection_config_id") # IDEK remember why i did len here, shouldnt it always be 1 (insert crying emoji) ehh i'll leave it
+                
+        self.total_saved_to_db += total_saved_in_batch
+        self.logger.info(f"Saved batch of {total_saved_in_batch} items")
+        
+        self.current_batch= []
         
     def _save_batch_between_topic_switch(self):
         if not self.save_to_database or not self.current_batch:
             return
         
-        if self.current_collection_type and self.current_language_code:
-            self._save_batch_if_needed(self.current_language_code, self.current_collection_name)
-        else:
-            self.logger.warning(f"Could not save batch between topic switch, self.current_collection_type: {self.current_collection_type}, self.current_language_code: {self.current_language_code}, self.current_collection_name: {self.current_collection_name}")
-    
+        self.logger.info(f"Saving last items of this batch due to topic change or reaching the end")
+        self._save_current_batch()
         
     """def collect_political_events_for_years(self, years=None):
         "Collect yearly political event summaries from Wikipedia (e.g. "2023 in Politics" Page)."
@@ -314,7 +311,7 @@ class WikipediaPoliticalCollector:
         
         return all_political_data
     
-def main():
+def main(): 
     collector = WikipediaPoliticalCollector()
     
     collector.logger.info("Wikipedia Political Data Collector")
