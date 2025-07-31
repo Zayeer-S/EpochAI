@@ -4,6 +4,7 @@ from epochai.common.config_loader import ConfigLoader
 from epochai.common.logging_config import setup_logging, get_logger
 from epochai.common.wikipedia_utils import WikipediaUtils
 from epochai.database_savers.wikipedia_saver import WikipediaSaver
+from epochai.common.database.dao.collection_configs_dao import CollectionConfigsDAO
 
 class WikipediaPoliticalCollector:
     def __init__(self):
@@ -29,6 +30,7 @@ class WikipediaPoliticalCollector:
         self.save_to_database = self.data_config.get('data_output').get('database').get('save_to_database')
         
         if self.save_to_database:
+            self.collection_configs_dao = CollectionConfigsDAO()
             self.batch_size = self.data_config.get('data_output').get('database').get('batch_size')
             self.current_batch = []
             self.total_saved_to_db = 0
@@ -36,6 +38,35 @@ class WikipediaPoliticalCollector:
             self.collected_data = []
             
         self.current_language_code = ''
+        self.current_collection_type = None
+        self.current_collection_name = None
+        
+    def _get_collection_config_id(
+        self,
+        collection_type: str,
+        language_code: str,
+        collection_name: str
+    ) -> Optional[int]:
+        """
+        Gets the collection_config_id for the current collection and returns it (if found, None if not found)
+        """
+        
+        try:
+            configs = self.collection_configs_dao.get_uncollected_by_type_and_language(
+                collection_type, language_code
+            )
+            
+            for config in configs:
+                if config.collection_name == collection_name:
+                    self.logger.debug(f"Found exact config match id {config.id} ({collection_type}, {language_code})")
+                    return config.id
+                
+            self.logger.warning(f"No existing config found for '{collection_name}' ({collection_type}, {language_code}). Might be missing from the database")
+            return None
+        
+        except Exception as general_error:
+            self.logger.error(f"Error getting collection config id for '{collection_name}' ({collection_type}, {language_code}): {general_error}")
+            return None
         
     def _handle_all_wikipedia_collection(
         self,
@@ -51,12 +82,17 @@ class WikipediaPoliticalCollector:
         
         self.logger.info(f"Collecting {collection_type} for {len(items_by_language)} items across {len(self.languages)} languages")
         
+        self.current_collection_type = collection_type
+        
         def collect_single_page_data(
             item: str,
             language_code: str
-        ) -> Optional[Dict[str, Any]]:
+        ) -> Optional[Dict[str, Any]]:  
             """"""
             self.logger.info(f"Collecting ({language_code}): {item}")
+            
+            self.current_collection_name = item
+            self.current_language_code = language_code
             
             if extra_data_func:
                 extra_data = extra_data_func(item)
@@ -69,7 +105,7 @@ class WikipediaPoliticalCollector:
                 self.logger.debug(f"Successfully collected ({language_code}): {item}")
                 
                 if self.save_to_database:
-                    self._add_to_batch([page], language_code)
+                    self._add_to_batch([page], language_code, item)
             else:
                 self.logger.warning(f"Nothing collected for ({language_code}): {item}")
                 
@@ -85,12 +121,16 @@ class WikipediaPoliticalCollector:
             if results:
                 all_collected_data.extend(results)
                 
+        if self.save_to_database:
+            self._save_batch_between_topic_switch()
+                
         return all_collected_data
     
     def _add_to_batch(
         self,
         data_items: List[Dict[str, Any]],
-        language_code: str
+        language_code: str,
+        collection_name: str
     ):
         """Adds data to current collection batch and saves via helper function if batch size is reached"""
         if not self.save_to_database:
@@ -101,17 +141,27 @@ class WikipediaPoliticalCollector:
             self.current_batch.append(item)
             
             if len(self.current_batch) >= self.batch_size:
-                self._save_batch_if_needed(language_code)
+                self._save_batch_if_needed(language_code, collection_name)
                 
     def _save_batch_if_needed(
         self,
-        language_code: str
+        language_code: str,
+        collection_name: str
     ):
         """Saves current batch using DataUtils and resets batch"""
         if not self.current_batch:
             return
         
-        collection_config_id = 1 ## TODO GET THIS DYNAMICALLY VIA FINDING CLOSEST MATCH TO collector_name_id IN collection_configs
+        collection_config_id = self._get_collection_config_id(
+            self.current_collection_type,
+            language_code,
+            collection_name
+        )
+        
+        if collection_config_id is None:
+            self.logger.error(f"Could not determine collection_config_id for '{collection_name}' ({self.current_collection_type}, {language_code}). Skipping batch save...")
+            self.current_batch = []
+            return 
         
         success_count = self.wikipedia_saver.save_incrementally_to_database(
             collected_data=self.current_batch,
@@ -121,13 +171,22 @@ class WikipediaPoliticalCollector:
         
         if success_count >= 0:
             self.total_saved_to_db += len(self.current_batch)
-            self.logger.info(f"Saved branch. Total articles saved until now: {self.total_saved_to_db}")
+            self.logger.info(f"Saved batch. Total articles saved until now: {self.total_saved_to_db}")
             
         self.current_batch = []
+        
+    def _save_batch_between_topic_switch(self):
+        if not self.save_to_database or not self.current_batch:
+            return
+        
+        if self.current_collection_type and self.current_language_code:
+            self._save_batch_if_needed(self.current_language_code, self.current_collection_name)
+        else:
+            self.logger.warning(f"Could not save batch between topic switch, self.current_collection_type: {self.current_collection_type}, self.current_language_code: {self.current_language_code}, self.current_collection_name: {self.current_collection_name}")
     
         
-    def collect_political_events_for_years(self, years=None):
-        """Collect yearly political event summaries from Wikipedia (e.g. "2023 in Politics" Page)."""
+    """def collect_political_events_for_years(self, years=None):
+        "Collect yearly political event summaries from Wikipedia (e.g. "2023 in Politics" Page)."
         if years is None:
             years = self.config['collection_years']
             
@@ -144,9 +203,9 @@ class WikipediaPoliticalCollector:
         self.logger.info(f"Collecting political events for years: {years}")
         
         def extract_year_from_title(event_title):
-            """
+            "
             Extract year from the political events' title (e.g. get 2023 from "2023 in Politics") and attachess it as metadata.
-            """
+            "
             for year_val in years:
                 if str(year_val) in event_title:
                     return{'event_year': year_val}
@@ -156,7 +215,7 @@ class WikipediaPoliticalCollector:
             events_to_collect,
             "political_events",
             extra_data_func=extract_year_from_title
-        )
+        )"""
     
     def collect_politician_pages(self):
         """Collects specific politician pages from wikipedia."""
@@ -165,8 +224,19 @@ class WikipediaPoliticalCollector:
         
         return self._handle_all_wikipedia_collection(
             self.config['politicians'],
-            "politicians_data",
+            "politicians",
             extra_data_func=add_politician_metadata
+        )
+        
+    def collect_important_persons_pages(self):
+        """Collects specific politician pages from wikipedia."""
+        def add_important_person_metadata(important_person_name):
+            return{'important_person_name': important_person_name}
+        
+        return self._handle_all_wikipedia_collection(
+            self.config['important_persons'],
+            "important_persons",
+            extra_data_func=add_important_person_metadata
         )
         
     def collect_political_topics(self):
@@ -176,12 +246,12 @@ class WikipediaPoliticalCollector:
         
         return self._handle_all_wikipedia_collection(
             self.config['political_topics'],
-            "political topics",
+            "political_topics",
             extra_data_func=add_topic_metadata
         )
         
-    def search_political_topics(self, query, language_code, max_results=None):
-        """Search wikipedia for political trends in a specific language
+    """def _____unused_for_now_____search_political_topics(self, query, language_code, max_results=None):
+        "Search wikipedia for political trends in a specific language
         
         Args:
             query (str): Search term to look for
@@ -190,7 +260,7 @@ class WikipediaPoliticalCollector:
             
         Returns:
             A list of collected page data from the specified language
-        """
+        "
         self.logger.info(f"Searching wikipedia for: '{query}' in language: '{language_code}'")
         
         if max_results is None:
@@ -214,7 +284,7 @@ class WikipediaPoliticalCollector:
     
         except Exception as e:
             self.logger.error(f"Search error in '{language_code}': {e}")
-            return []
+            return []"""
     
     def wikipedia_political_data_orchestrator(self):
         """Collect political data from multiple sources."""
@@ -223,18 +293,21 @@ class WikipediaPoliticalCollector:
         
         self.logger.info("=== Starting comprehensive political data collection ===")
         
-        self.logger.info(f"1. Collecting yearly political event summaries...")
-        previous_year_wiki_data = self.collect_political_events_for_years()
-        
-        self.logger.info("2. Collecting politician data...")
+        self.logger.info("1. Collecting politician data...")
         politician_wiki_data = self.collect_politician_pages()
+        
+        self.logger.info("2. Collecting important persons data...")
+        important_persons_data = self.collect_important_persons_pages()
         
         self.logger.info("3. Collecting political topic data...")
         topic_wiki_data = self.collect_political_topics()
         
-        all_political_data.extend(previous_year_wiki_data)
         all_political_data.extend(politician_wiki_data)
+        all_political_data.extend(important_persons_data)
         all_political_data.extend(topic_wiki_data)
+        
+        if self.save_to_database:
+            self._save_batch_between_topic_switch()
         
         self.logger.info(f"==== Collection Complete ===")
         self.logger.info(f"Total data points collected: {len(all_political_data)}")
@@ -253,9 +326,6 @@ def main():
         data_type = collector.data_config['data_output']['default_type_wikipedia']
         
         if collector.save_to_database:
-            # Save anything left in the batch
-            if collector.current_batch:
-                collector._save_batch_if_needed()
             collector.logger.info(f"All data saved incrementally. Total: {collector.total_saved_to_db}")
         else:
             collector.wikipedia_saver.save_locally_at_end(
