@@ -74,7 +74,9 @@ class WikipediaPoliticalCollector:
         collection_type: str,
         extra_data_func: Optional[Callable[[str], Dict[str, Any]]]
         ) -> List[Dict[str, Any]]:
-        """"""
+        """
+        Handles all wikipedia collection including batch saving (if saving to database)
+        """
         
         if not items_by_language:
             self.logger.warning(f"No items provided for {collection_type}")
@@ -88,7 +90,9 @@ class WikipediaPoliticalCollector:
             item: str,
             language_code: str
         ) -> Optional[Dict[str, Any]]:  
-            """"""
+            """
+            Gets the metadata for only one page and saves it if incrementally saving
+            """
             self.logger.info(f"Collecting ({language_code}): {item}")
             
             self.current_collection_name = item
@@ -136,7 +140,7 @@ class WikipediaPoliticalCollector:
         self,
         item_data: Dict[str, Any],
         collection_config_id: int
-    ):
+    ) -> None:
         """Adds a single item with its collection_config_id to the batch"""
         if not self.save_to_database:
             self.collected_data.append(item_data)
@@ -147,7 +151,7 @@ class WikipediaPoliticalCollector:
         if len(self.current_batch) >= self.batch_size:
             self._save_current_batch()
                 
-    def _save_current_batch(self):
+    def _save_current_batch(self) -> None:
         """Saves current batch using DataUtils and resets batch"""
         if not self.current_batch:
             return
@@ -173,16 +177,16 @@ class WikipediaPoliticalCollector:
         self.total_saved_to_db += total_saved_in_batch
         self.logger.info(f"Saved batch of {total_saved_in_batch} items")
         
-        self.current_batch= []
+        self.current_batch = []
         
-    def _save_batch_between_topic_switch(self):
+    def _save_batch_between_topic_switch(self) -> None:
         if not self.save_to_database or not self.current_batch:
             return
         
         self.logger.info(f"Saving last items of this batch due to topic change or reaching the end")
         self._save_current_batch()
         
-    def collect_politician_pages(self):
+    def collect_politician_pages(self) -> List[Dict[str, Any]]:
         """Collects specific politician pages from wikipedia."""
         def add_politician_metadata(politician_name):
             return{'politician_name': politician_name}
@@ -193,8 +197,8 @@ class WikipediaPoliticalCollector:
             extra_data_func=add_politician_metadata
         )
         
-    def collect_important_persons_pages(self):
-        """Collects specific politician pages from wikipedia."""
+    def collect_important_persons_pages(self) -> List[Dict[str, Any]]:
+        """Collects specific important person pages from wikipedia."""
         def add_important_person_metadata(important_person_name):
             return{'important_person_name': important_person_name}
         
@@ -204,7 +208,7 @@ class WikipediaPoliticalCollector:
             extra_data_func=add_important_person_metadata
         )
         
-    def collect_political_topics(self):
+    def collect_political_topics(self) -> List[Dict[str, Any]]:
         """Collect wiki pages for specific political topics"""
         def add_topic_metadata(topic_name):
             return {'topic_name': topic_name}
@@ -251,8 +255,8 @@ class WikipediaPoliticalCollector:
             self.logger.error(f"Search error in '{language_code}': {e}")
             return []"""
     
-    def wikipedia_political_data_orchestrator(self):
-        """Collect political data from multiple sources."""
+    def wikipedia_political_data_orchestrator(self) -> List[Dict[str, Any]]:
+        """Collect political data from wikipedia. It's the site of orchestrating the collection flow and returns the data"""
         
         all_political_data =  []
         
