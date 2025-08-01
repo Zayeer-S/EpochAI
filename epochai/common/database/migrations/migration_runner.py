@@ -36,7 +36,7 @@ class MigrationRunner:
         try:
             with open(filepath, 'r', encoding='utf-8') as file:
                 content = file.read()
-                return hashlib.md5(content).hexdigest()
+                return hashlib.md5(content.encode('utf-8')).hexdigest()
             
         except Exception as general_error:
             self.logger.error(F"Error calculating checksum for {filepath}: {general_error}")
