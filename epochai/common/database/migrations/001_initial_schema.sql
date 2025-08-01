@@ -152,7 +152,7 @@ CREATE TABLE IF NOT EXISTS schema_migrations (
     filename TEXT NOT NULL,
     checksum TEXT,
     executed_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    execution_time_seconds DECIMAL(10,3) NOT NULL,
+    execution_time_ms DECIMAL(10,3) NOT NULL,
     status TEXT NOT NULL,
     error_message TEXT,
     rolled_back_at TIMESTAMP WITH TIME ZONE,
@@ -196,25 +196,25 @@ CREATE INDEX IF NOT EXISTS idx_schema_migrations_executed_at ON schema_migration
 
 
 -- Table comments
-COMMENT ON TABLE collector_names IS 'Lookup table for different collectors'
-COMMENT ON TABLE collection_types IS 'Lookup table for collection types'
-COMMENT ON TABLE collection_configs IS 'Configuration of what needs to be collected'
-COMMENT ON TABLE collection_attempts IS 'Log of each collection attempt'
-COMMENT ON TABLE collected_contents IS 'Table storing collected content from collectors'
-COMMENT ON TABLE collected_content_metadata IS 'Key : Value metadata for collected data'
-COMMENT ON TABLE debug_wikipedia_results IS 'Results from debug testing of wikipedia collector'
-COMMENT ON TABLE run_collection_metadata IS 'Metadata about collection runs and their performance'
-COMMENT ON TABLE link_attempts_to_runs IS 'Link table between collection_attempts and run_collection_metadata'
+COMMENT ON TABLE collector_names IS 'Lookup table for different collectors';
+COMMENT ON TABLE collection_types IS 'Lookup table for collection types';
+COMMENT ON TABLE collection_configs IS 'Configuration of what needs to be collected';
+COMMENT ON TABLE collection_attempts IS 'Log of each collection attempt';
+COMMENT ON TABLE collected_contents IS 'Table storing collected content from collectors';
+COMMENT ON TABLE collected_content_metadata IS 'Key : Value metadata for collected data';
+COMMENT ON TABLE debug_wikipedia_results IS 'Results from debug testing of wikipedia collector';
+COMMENT ON TABLE run_collection_metadata IS 'Metadata about collection runs and their performance';
+COMMENT ON TABLE link_attempts_to_runs IS 'Link table between collection_attempts and run_collection_metadata';
 
 
 
 --- Column Comments
-COMMENT ON COLUMN collection_configs.is_collected IS 'Whether or not this configuration has beeen successfully collected (True = Collected)'
-COMMENT ON COLUMN collection_attempts.language_code_used IS 'Actual language code used during the collection attempt'
-COMMENT ON COLUMN collection_attempts.search_term_used IS 'Actual search term used during collection attempt'
-COMMENT ON COLUMN collected_contents.validation_error IS 'JSON object containing the validation error details if the validation has failed'
-COMMENT ON COLUMN debug_wikipedia_results.test_duration IS 'Test duration in miliseconds'
-COMMENT ON COLUMN run_collection_metadata.config_used IS 'JSON of configuration used during the run'
+COMMENT ON COLUMN collection_configs.is_collected IS 'Whether or not this configuration has beeen successfully collected (True = Collected)';
+COMMENT ON COLUMN collection_attempts.language_code_used IS 'Actual language code used during the collection attempt';
+COMMENT ON COLUMN collection_attempts.search_term_used IS 'Actual search term used during collection attempt';
+COMMENT ON COLUMN collected_contents.validation_error IS 'JSON object containing the validation error details if the validation has failed';
+COMMENT ON COLUMN debug_wikipedia_results.test_duration IS 'Test duration in miliseconds';
+COMMENT ON COLUMN run_collection_metadata.config_used IS 'JSON of configuration used during the run';
 
 
 
@@ -231,4 +231,4 @@ AND table_name in (
     'validation_statuses', 'collected_content_types', 'collected_contents', 'collected_content_metadata', 'content_metadata_schemas',
     'debug_wikipedia_results', 'run_types', 'run_statuses', 'run_collection_metadata', 'link_attempts_to_runs'
 )
-ORDER BY table_name
+ORDER BY table_name;
