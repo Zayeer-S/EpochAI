@@ -143,7 +143,7 @@ class WikipediaPoliticalCollector:
             
             if success_count >= 0:
                 total_saved_in_batch += len(items)
-                self.logger.debug(f"Saved {len(items)} item with collection_config_id") # IDEK remember why i did len here, shouldnt it always be 1 (insert crying emoji) ehh i'll leave it
+                self.logger.debug(f"Saved item with collection_config_id: {collection_config_id}")
                 
         self.total_saved_to_db += total_saved_in_batch
         self.logger.info(f"Saved batch of {total_saved_in_batch} items")
