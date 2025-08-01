@@ -5,6 +5,9 @@ from contextlib import contextmanager
 from typing import Any, Dict, List, Optional
 import threading
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from epochai.common.logging_config import get_logger
 
 logger = get_logger(__name__)
