@@ -25,7 +25,7 @@ class MigrationRunner:
             self.migrations_dir = Path(migrations_directory)
         else:
             current_dir = Path(__file__).parent
-            self.migrations_dir = current_dir / "migrations"
+            self.migrations_dir = current_dir
         
     def _calculate_file_checksum(
         self,
