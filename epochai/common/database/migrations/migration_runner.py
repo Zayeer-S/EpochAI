@@ -100,24 +100,17 @@ class MigrationRunner:
         """Executes migration SQL content"""
         
         try:
-            statements = [stmt.strip() for stmt in sql_content.split(';') if stmt.strip()]
-            
             with self.db.get_cursor() as cursor:
-                for statement in statements:
-                    if statement.upper().startswith('COMMENT'):
-                        cursor.execute(statement)
-                    elif statement:
-                        cursor.execute(statement)
-                        
+                cursor.execute(sql_content)
                 self.db._connection.commit()
                 return True, None
-            
+        
         except Exception as general_error:
             self.logger.error(f"Error executing migration SQL: {general_error}")
             if self.db._connection:
                 self.db._connection.rollback()
             return False, str(general_error)
-               
+            
     def get_pending_migrations(self) -> List[Tuple[str, str, Path]]:
         """Gets list of pending unapplied migrations"""
         
