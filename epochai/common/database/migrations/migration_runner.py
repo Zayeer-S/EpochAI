@@ -117,7 +117,7 @@ class MigrationRunner:
             if self.db._connection:
                 self.db._connection.rollback()
             return False, str(general_error)
-        
+               
     def get_pending_migrations(self) -> List[Tuple[str, str, Path]]:
         """Gets list of pending unapplied migrations"""
         
@@ -158,7 +158,7 @@ class MigrationRunner:
                     version=version,
                     filename=filepath.name,
                     executed_at=datetime.now(),
-                    execution_time_seconds=execution_time,
+                    execution_time_ms=execution_time,
                     status='completed',
                     checksum=checksum
                 )
@@ -175,7 +175,7 @@ class MigrationRunner:
                     version=version,
                     filename=filepath.name,
                     executed_at=datetime.now(),
-                    execution_time_seconds=execution_time,
+                    execution_time_ms=execution_time,
                     status='failed',
                     checksum=checksum,
                     error_message=error_message
@@ -193,7 +193,7 @@ class MigrationRunner:
                     version=version,
                     filename=filepath.name,
                     executed_at=datetime.now(),
-                    execution_time_seconds=execution_time,
+                    execution_time_ms=execution_time,
                     status='unexpected_error',
                     checksum=checksum,
                     error_message=str(general_error)
