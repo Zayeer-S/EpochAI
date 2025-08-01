@@ -11,6 +11,54 @@ class TrackSchemaMigrationsDAO:
     def __init__(self):
         self.db = get_database()
         self.logger = get_logger(__name__)
+        if not self._ensure_schema_migrations_table_exists():
+            raise RuntimeError(f"Error schema_migrations table does not exist and is not being automatically created")
+        
+    def _ensure_schema_migrations_table_exists(self) -> bool:
+        """Create schema_migrations table if it does not exist"""
+        
+        create_table_query = """
+            CREATE TABLE IF NOT EXISTS schema_migrations (
+                id SERIAL PRIMARY KEY,
+                version TEXT NOT NULL UNIQUE,
+                filename TEXT NOT NULL,
+                checksum TEXT,
+                executed_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+                execution_time_seconds DECIMAL(10,3) NOT NULL,
+                status TEXT NOT NULL,
+                error_message TEXT,
+                rolled_back_at TIMESTAMP WITH TIME ZONE,
+                created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+            );
+        """
+        
+        index_queries = [
+            "CREATE INDEX IF NOT EXISTS idx_schema_migrations_version ON schema_migrations(version);",
+            "CREATE INDEX IF NOT EXISTS idx_schema_migrations_status ON schema_migrations(status);",
+            "CREATE INDEX IF NOT EXISTS idx_schema_migrations_executed_at ON schema_migrations(executed_at);",
+        ]   
+        
+        try:
+            with self.db.get_cursor() as cursor:
+                cursor.execute(create_table_query)
+                self.logger.debug("schema_migrations table created")
+                
+                for each_index_query in index_queries:
+                    cursor.execute(each_index_query)
+                self.logger.debug("schema_migrations table's indexes have been created")
+                    
+                cursor.execute("COMMENT ON TABLE schema_migrations IS 'Tracks database schema migration history'")
+                
+                self.db._connection.commit()
+                
+                self.logger.info("Schema migrations table and indexes created/verified successfully")
+                return True
+            
+        except Exception as general_error:
+            self.logger.error(f"Error creating schema_migrations table: {general_error}")
+            if self.db._connection:
+                self.db._connection.rollback()
+            return False
     
     def create_migration_record(
         self,
