@@ -24,7 +24,7 @@ class TrackSchemaMigrationsDAO:
                 filename TEXT NOT NULL,
                 checksum TEXT,
                 executed_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-                execution_time_seconds DECIMAL(10,3) NOT NULL,
+                execution_time_ms DECIMAL(10,3) NOT NULL,
                 status TEXT NOT NULL,
                 error_message TEXT,
                 rolled_back_at TIMESTAMP WITH TIME ZONE,
@@ -65,7 +65,7 @@ class TrackSchemaMigrationsDAO:
         version: str,
         filename: str,
         executed_at: datetime,
-        execution_time_seconds: float,
+        execution_time_ms: float,
         status: str = 'completed',
         checksum: Optional[str] = None,
         error_message: Optional[str] = None
@@ -78,7 +78,7 @@ class TrackSchemaMigrationsDAO:
         """
         query = """
             INSERT INTO schema_migrations 
-            (version, filename, checksum, executed_at, execution_time_seconds, status, error_message, created_at)
+            (version, filename, checksum, executed_at, execution_time_ms, status, error_message, created_at)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """
@@ -86,7 +86,7 @@ class TrackSchemaMigrationsDAO:
         try:
             current_timestamp = datetime.now()
             params = (
-                version, filename, checksum, executed_at, execution_time_seconds, 
+                version, filename, checksum, executed_at, execution_time_ms, 
                 status, error_message, current_timestamp
             )
             
@@ -261,10 +261,10 @@ class TrackSchemaMigrationsDAO:
             SELECT 
                 status,
                 COUNT(*) as migration_count,
-                AVG(execution_time_seconds) as avg_execution_time,
-                MIN(execution_time_seconds) as min_execution_time,
-                MAX(execution_time_seconds) as max_execution_time,
-                SUM(execution_time_seconds) as total_execution_time
+                AVG(execution_time_ms) as avg_execution_time,
+                MIN(execution_time_ms) as min_execution_time,
+                MAX(execution_time_ms) as max_execution_time,
+                SUM(execution_time_ms) as total_execution_time
             FROM schema_migrations
             GROUP BY status
             ORDER BY migration_count DESC
@@ -387,7 +387,7 @@ class TrackSchemaMigrationsDAO:
         query = """
             SELECT * FROM schema_migrations 
             WHERE status = 'completed'
-            ORDER BY execution_time_seconds DESC
+            ORDER BY execution_time_ms DESC
             LIMIT %s
         """
         
