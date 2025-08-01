@@ -144,20 +144,20 @@ class MigrationRunner:
             
             success, error_message = self._execute_migration_sql(sql_content)
             
-            execution_time = time.time() - start_time
+            execution_time_ms = (time.time() - start_time) * 1000
             
             if success:
                 migration_id = self.migration_dao.create_migration_record(
                     version=version,
                     filename=filepath.name,
                     executed_at=datetime.now(),
-                    execution_time_ms=execution_time,
+                    execution_time_ms=execution_time_ms,
                     status='completed',
                     checksum=checksum
                 )
                 
                 if migration_id:
-                    self.logger.info(f"Successfully apllied migration {version} ({execution_time:.3fs} seconds)")
+                    self.logger.info(f"Successfully apllied migration {version} ({execution_time_ms:.3fs} seconds)")
                     return True
                 else:
                     self.logger.error(f"Failed to record migration {version} in tracking table")
@@ -168,7 +168,7 @@ class MigrationRunner:
                     version=version,
                     filename=filepath.name,
                     executed_at=datetime.now(),
-                    execution_time_ms=execution_time,
+                    execution_time_ms=execution_time_ms,
                     status='failed',
                     checksum=checksum,
                     error_message=error_message
@@ -178,7 +178,7 @@ class MigrationRunner:
                 return False
                 
         except Exception as general_error:
-            execution_time = time.time() - start_time
+            execution_time_ms = (time.time() - start_time) * 1000
             self.logger.error(f"Unexpected error when running migration {version}: {general_error}")
             
             try:
@@ -186,7 +186,7 @@ class MigrationRunner:
                     version=version,
                     filename=filepath.name,
                     executed_at=datetime.now(),
-                    execution_time_ms=execution_time,
+                    execution_time_ms=execution_time_ms,
                     status='unexpected_error',
                     checksum=checksum,
                     error_message=str(general_error)
