@@ -35,6 +35,5 @@ logs/*
 vscode/
 
 # Migrations
-epochai/common/database/migrations/*
-!epochai/common/database/migrations/001_initial_schema.sql
-!epochai/common/database/migrations/migration_runner.py
+epochai/common/database/migrations/versions/*
+!epochai/common/database/migrations/versions/001_initial_schema.py
