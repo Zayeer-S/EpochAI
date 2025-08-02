@@ -1,5 +1,3 @@
-BEGIN; -- THE SQL!
-
 --  LOOKUP TABLES
 CREATE TABLE IF NOT EXISTS collector_names (
     id SERIAL PRIMARY KEY,
@@ -146,19 +144,6 @@ CREATE TABLE IF NOT EXISTS link_attempts_to_runs (
     CONSTRAINT unique_attempt_to_runs UNIQUE (collection_attempt_id, run_collection_metadata_id)
 );
 
-CREATE TABLE IF NOT EXISTS schema_migrations (
-    id SERIAL PRIMARY KEY,
-    version TEXT NOT NULL UNIQUE,
-    filename TEXT NOT NULL,
-    checksum TEXT,
-    executed_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    execution_time_ms DECIMAL(10,3) NOT NULL,
-    status TEXT NOT NULL,
-    error_message TEXT,
-    rolled_back_at TIMESTAMP WITH TIME ZONE,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-);
-
 
 -- INDEX TIME
 CREATE INDEX IF NOT EXISTS idx_collection_configs_collector_types ON collection_configs(collector_name_id, collection_type_id);
@@ -189,12 +174,6 @@ CREATE INDEX IF NOT EXISTS idx_run_collection_metadata_created_at ON run_collect
 CREATE INDEX IF NOT EXISTS idx_link_attempts_to_runs_collection_attempt_id ON link_attempts_to_runs(collection_attempt_id);
 CREATE INDEX IF NOT EXISTS idx_link_attempts_to_runs_run_collection_metadata_id ON link_attempts_to_runs(run_collection_metadata_id);
 
-CREATE INDEX IF NOT EXISTS idx_schema_migrations_version ON schema_migrations(version);
-CREATE INDEX IF NOT EXISTS idx_schema_migrations_status ON schema_migrations(status);
-CREATE INDEX IF NOT EXISTS idx_schema_migrations_executed_at ON schema_migrations(executed_at);
-
-
-
 -- Table comments
 COMMENT ON TABLE collector_names IS 'Lookup table for different collectors';
 COMMENT ON TABLE collection_types IS 'Lookup table for collection types';
@@ -215,20 +194,3 @@ COMMENT ON COLUMN collection_attempts.search_term_used IS 'Actual search term us
 COMMENT ON COLUMN collected_contents.validation_error IS 'JSON object containing the validation error details if the validation has failed';
 COMMENT ON COLUMN debug_wikipedia_results.test_duration IS 'Test duration in miliseconds';
 COMMENT ON COLUMN run_collection_metadata.config_used IS 'JSON of configuration used during the run';
-
-
-
-COMMIT;
-
-
-
--- Table check
-SELECT table_name
-FROM information_schema.tables
-WHERE table_schema = 'public'
-AND table_name in (
-    'collector_names', 'collection_types', 'collection_configs', 'attempt_statuses', 'error_types', 'collection_attempts',
-    'validation_statuses', 'collected_content_types', 'collected_contents', 'collected_content_metadata', 'content_metadata_schemas',
-    'debug_wikipedia_results', 'run_types', 'run_statuses', 'run_collection_metadata', 'link_attempts_to_runs'
-)
-ORDER BY table_name;
