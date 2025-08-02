@@ -101,7 +101,11 @@ class MigrationRunner:
         
         try:
             with self.db.get_cursor() as cursor:
-                cursor.execute(sql_content)
+                statements = [stmt.strip() for stmt in sql_content.split(';') if stmt.strip()]
+                
+                for statement in statements:
+                    cursor.execute(statement)
+                
                 self.db._connection.commit()
                 return True, None
         
@@ -157,7 +161,7 @@ class MigrationRunner:
                 )
                 
                 if migration_id:
-                    self.logger.info(f"Successfully apllied migration {version} ({execution_time_ms:.3fs} seconds)")
+                    self.logger.info(f"Successfully apllied migration {version} ({execution_time_ms:.3f} ms)")
                     return True
                 else:
                     self.logger.error(f"Failed to record migration {version} in tracking table")
