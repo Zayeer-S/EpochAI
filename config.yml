@@ -28,7 +28,6 @@ data_settings:
 # Default setup for collectors
 defaults:
   wikipedia:
-    collector_name: "wikipedia_collector"
 
     collection_years: []
     politicians: []
@@ -36,6 +35,7 @@ defaults:
     political_events_template: ["{year} in politics"] ## This becomes e.g. "2023 in politics"
 
     api:
+      collector_name: "wikipedia_collector"
       language: ["en"]
       rate_limit_delay: 2.0
       max_retries: 3
@@ -45,9 +45,9 @@ defaults:
 
 # Fine tune Wikipedia API config settings
 wikipedia:
-  collector_name: "wikipedia_collector"
 
   api:
+    collector_name: "wikipedia_collector"
     language: ["en", "fr"]
     rate_limit_delay: 0.5
     max_retries: 5
