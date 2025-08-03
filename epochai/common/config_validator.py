@@ -19,10 +19,10 @@ class DatabaseConfig(BaseModel):
     def validate_using_constraints(self):
         constraints_config = ConfigValidator._get_constraints_config()
         
-        save_to_database = constraints_config['data_output']['save_to_database']
+        database = constraints_config['data_output']['database']
         
-        min_batch_size = save_to_database['min_batch_size']
-        max_batch_size = save_to_database['max_batch_size']
+        min_batch_size = database['min_batch_size']
+        max_batch_size = database['max_batch_size']
         
         if not (min_batch_size <= self.batch_size <= max_batch_size):
             raise ValueError(f"batch_size currently {self.batch_size}, must be: {min_batch_size} <= batch_size <= {max_batch_size}")
