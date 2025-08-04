@@ -4,8 +4,8 @@ from epochai.common.logging_config import get_logger
 from epochai.common.database.dao.collection_attempts_dao import CollectionAttemptsDAO
 from epochai.common.database.dao.collected_contents_dao import CollectedContentsDAO
 from epochai.common.database.dao.collection_configs_dao import CollectionConfigsDAO
-from epochai.common.data_utils import DataUtils
-from epochai.common.config_loader import ConfigLoader
+from epochai.common.utils.data_utils import DataUtils
+from epochai.common.config.config_loader import ConfigLoader
 
 class WikipediaSaver:
     

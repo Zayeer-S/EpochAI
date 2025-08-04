@@ -46,12 +46,16 @@ EpochAI/
 │   ├── __init__.py                     
 │   ├── common/                                         # Shared utilities
 │   │   ├── __init__.py     
+│   │   ├── logging_config.py                       # Creates a centralized logger for the project   
 │   │   ├── config/                                     # Config loading and validation
 │   │   │   ├── __init__.py     
 │   │   │   ├── config_loader.py                        # Loads config.yml and validates by calling config_validator.py
 │   │   │   └── config_validator.py                     # Validates config and returns error messages if invalid
 │   │   ├── database/                                   # Everything database related
 │   │   │   ├── __init__.py         
+│   │   │   ├── collection_config_manager.py            # Data service layer file for various collection_config_id related functionality
+│   │   │   ├── database.py                             # Sets up database connection and has functions allowing DAOs to access CRUD queries
+│   │   │   ├── models.py                               # Sets up models for the database            
 │   │   │   ├── dao/                                    
 │   │   │   │   ├── __init__.py                         
 │   │   │   │   ├── attempt_statuses_dao.py             # attempt_statuses_table DAO
@@ -73,17 +77,18 @@ EpochAI/
 │   │   │   │   └── validation_statuses_dao.py          # validation_statuses table DAO
 │   │   │   │   ├── database.py                         # Sets up database connection and has functions to access CRUD queries
 │   │   │   │   └── models.py                           # Sets up models for the database
-│   │   │   ├── migrations/        
-│   │   │   │   ├── __init__.py                         
-│   │   │   │   ├── 001_initial_schema.sql   
-│   │   │   │   └── migration_runner.py      
-│   │   │   ├── database.py                             # Sets up database connection and has functions to access CRUD queries
-│   │   │   └── models.py                               # Sets up models for the database            
-│   │   ├── utils/                                      # Collector Utils
-│   │   │   ├── data_utils.py                           # Save functionality for collectors
-│   │   │   ├── evaluation.py   
-│   │   │   └── wikipedia_utils.py      
-│   │   └── logging_config.py                           # Creates a centralized logging for the project
+│   │   │   └── migrations/        
+│   │   │       ├── __init__.py                         
+│   │   │       ├── versions/  
+│   │   │       │   └── 001_initial_schema.py           # Initial schema setup using alembic 
+│   │   │       ├── COMMANDS.md                         # Alembic commands cheat sheet                         
+│   │   │       ├── env.py                              # Alembic created file, contains custom code to get database credentials from .env
+│   │   │       └── script.py.maki                      # Alembic created file on install    
+│   │   └── utils/                                      # Collector Utils
+│   │       ├── __init.py__                          
+│   │       ├── data_utils.py                           # Save functionality for collectors
+│   │       ├── evaluation.py   
+│   │       └── wikipedia_utils.py      
 │   ├── data_collection/                                # Data collection modules
 │   │   ├── __init__.py         
 │   │   ├── debug.py                                    # Debug script (checks if collection config returns success or fail)
