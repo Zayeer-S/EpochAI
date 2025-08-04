@@ -88,13 +88,7 @@ class CollectionConfigManager:
                 if each_config.language_code not in grouped_configs[type_name]:
                     grouped_configs[type_name][each_config.language_code] = []
                     
-                grouped_configs[type_name][each_config.language_code].append({
-                    'id': each_config.id,
-                    'name': each_config.collection_name,
-                    'is_collected': each_config.is_collected,
-                    'created_at': each_config.created_at,
-                    'updated_at': each_config.updated_at
-                })
+                grouped_configs[type_name][each_config.language_code].append(each_config.collection_name)
                 
             cls._logger.info(f"Retrieved {len(collection_configs)} collection configs from database")
             return grouped_configs
@@ -250,6 +244,9 @@ class CollectionConfigManager:
                 
             if 'political_topics' in db_configs:
                 combined_config['political_topics'] = db_configs['political_topics']
+                
+            if 'important_persons' in db_configs:
+                combined_config['important_persons'] = db_configs['important_persons']
                 
             combined_config['_database_info'] = {
                 'total_types': len(db_configs),

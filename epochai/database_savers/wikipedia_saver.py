@@ -123,7 +123,7 @@ class WikipediaSaver:
             
             for config in configs:
                 if config.collection_name == collection_name:
-                    self.logger.debug(f"Found exact config match id {config.id}")
+                    self.logger.debug(f"Found exact config match id {config.id} for name {collection_name}")
                     return config.id
                     
             self.logger.warning(f"No existing config found for '{collection_name}'")
