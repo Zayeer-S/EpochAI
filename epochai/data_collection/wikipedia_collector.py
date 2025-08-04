@@ -163,6 +163,17 @@ class WikipediaPoliticalCollector:
         metadata_key_name: str
         ) -> List[Dict[str, Any]]:
         """Collects collection config pages from Wikipedia"""
+        
+        config_section = self.config.get(collection_config_name)
+        if not config_section:
+            self.logger.warning(f"No valid configs found for '{collection_config_name}', skipping...")
+            return []
+        
+        has_items = any(items for items in config_section.values() if isinstance(items, list) and items)
+        if not has_items:
+            self.logger.warning(f"No items found in config for '{collection_config_name}', skipping...")
+            return []
+        
         def add_metadata(metadata_value_name):
             return{f'{metadata_key_name}': metadata_value_name}
         
