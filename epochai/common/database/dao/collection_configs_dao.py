@@ -127,7 +127,7 @@ class CollectionConfigsDAO:
             results = self.db.execute_select_query(query, (collection_types, language_code))
             configs = [CollectionConfigs.from_dict(row) for row in results]
             
-            self.logger.info(f"Found {len(configs)} uncollected in type '{collection_types}' for language code '{language_code}'")
+            #self.logger.info(f"Found {len(configs)} uncollected in type '{collection_types}' for language code '{language_code}'")
             return configs
         
         except Exception as general_error:
