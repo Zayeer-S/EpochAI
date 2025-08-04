@@ -52,7 +52,7 @@ class WikipediaSaver:
         collection_config_id: int,
         language_code: str
     ) -> Optional[int]:
-       
+  
         self.logger.info(f"Saving {len(collected_data)} Wikipedia articles to database for config {collection_config_id}...")
         
         success_count = 0
@@ -91,17 +91,26 @@ class WikipediaSaver:
                         validation_error=None,
                         filepath_of_save=""
                     )
-                    
-                    if content_id:
-                        success_count += 1
+                        
+                    if not content_id:
+                        self.logger.error(f"Failed to insert content for '{title}'")
                     else:
-                        self.logger.error(f"Failed  to insert content for '{title}'")
+                        success_count += 1
+                        self.logger.info(f"Successfully saved '{title}' to database")
                     
             except Exception as general_error:
                 self.logger.error(f"Database error while saving '{title}': {general_error}")
-                    
-        self.logger.info(f"Successfully saved {success_count} of length {len(collected_data)} Wikipedia articles to the database")
-        return success_count
+        
+        
+        if success_count > 0:
+            mark_as_collected = self.collection_configs_dao.mark_as_collected(collection_config_id)
+            if mark_as_collected:
+                self.logger.info(f"Marked config {collection_config_id} as collected after saving {success_count} items")
+            else:
+                self.logger.error(f"Failed to mark config {collection_config_id} as collected")
+        
+            self.logger.info(f"Successfully saved {success_count} of {len(collected_data)} Wikipedia articles to the database")
+            return success_count
     
     def log_data_summary(
         self,
