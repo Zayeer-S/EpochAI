@@ -175,7 +175,7 @@ class ConfigLoader:
     def get_wikipedia_config() -> Dict[str, Any]:
         """Gets whole Wikipedia Config (combination of YAML + DB) and returns it"""
         wikipedia_yaml_config = ConfigLoader.get_wikipedia_yaml_config()
-        collector_name = wikipedia_yaml_config['collector_name']
+        collector_name = wikipedia_yaml_config['api']['collector_name']
         
         from epochai.common.database.collection_config_manager import CollectionConfigManager
         return CollectionConfigManager.get_combined_wikipedia_config(collector_name = collector_name)
