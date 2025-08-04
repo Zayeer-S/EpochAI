@@ -75,6 +75,8 @@ class CollectionConfigManager:
                 
                 if is_collected is not None:
                     collection_configs = [c for c in collection_configs if c.is_collected == is_collected]
+                else:
+                    collection_configs = [c for c in collection_configs if not c.is_collected]
                     
             grouped_configs = {}
             
