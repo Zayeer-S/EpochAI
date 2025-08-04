@@ -8,7 +8,7 @@ class ConfigValidator:
         Gets constraints config via config_loader.py
         Note: this function is only really helpful for config_validator, probably shouldn't use this function outside of config_validator
         """
-        from epochai.common.config_loader import ConfigLoader
+        from epochai.common.config.config_loader import ConfigLoader
         return ConfigLoader.load_constraints_config()
     
 class DatabaseConfig(BaseModel):

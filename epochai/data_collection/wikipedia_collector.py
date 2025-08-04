@@ -1,8 +1,8 @@
 from typing import Optional, List, Dict, Any, Callable
 
-from epochai.common.config_loader import ConfigLoader
+from epochai.common.config.config_loader import ConfigLoader
 from epochai.common.logging_config import setup_logging, get_logger
-from epochai.common.wikipedia_utils import WikipediaUtils
+from epochai.common.utils.wikipedia_utils import WikipediaUtils
 from epochai.database_savers.wikipedia_saver import WikipediaSaver
 
 class WikipediaPoliticalCollector:
