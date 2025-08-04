@@ -157,37 +157,19 @@ class WikipediaPoliticalCollector:
         self.logger.info(f"Saving last items of this batch due to topic change or reaching the end")
         self._save_current_batch()
         
-    def collect_politician_pages(self) -> List[Dict[str, Any]]:
-        """Collects specific politician pages from wikipedia."""
-        def add_politician_metadata(politician_name):
-            return{'politician_name': politician_name}
+    def _collect_collection_config(
+        self,
+        collection_config_name: str,
+        metadata_key_name: str
+        ) -> List[Dict[str, Any]]:
+        """Collects collection config pages from Wikipedia"""
+        def add_metadata(metadata_value_name):
+            return{f'{metadata_key_name}': metadata_value_name}
         
         return self._handle_all_wikipedia_collection(
-            self.config['politicians'],
-            "politicians",
-            extra_data_func=add_politician_metadata
-        )
-        
-    def collect_important_persons_pages(self) -> List[Dict[str, Any]]:
-        """Collects specific important person pages from wikipedia."""
-        def add_important_person_metadata(important_person_name):
-            return{'important_person_name': important_person_name}
-        
-        return self._handle_all_wikipedia_collection(
-            self.config['important_persons'],
-            "important_persons",
-            extra_data_func=add_important_person_metadata
-        )
-        
-    def collect_political_topics(self) -> List[Dict[str, Any]]:
-        """Collect wiki pages for specific political topics"""
-        def add_topic_metadata(topic_name):
-            return {'topic_name': topic_name}
-        
-        return self._handle_all_wikipedia_collection(
-            self.config['political_topics'],
-            "political_topics",
-            extra_data_func=add_topic_metadata
+            self.config[f'{collection_config_name}'],
+            f"{collection_config_name}",
+            extra_data_func=add_metadata
         )
         
     """def _____unused_for_now_____search_political_topics(self, query, language_code, max_results=None):
@@ -234,13 +216,13 @@ class WikipediaPoliticalCollector:
         self.logger.info("=== Starting comprehensive political data collection ===")
         
         self.logger.info("1. Collecting politician data...")
-        politician_wiki_data = self.collect_politician_pages()
+        politician_wiki_data = self._collect_collection_config("politicians", "politician_name")
         
         self.logger.info("2. Collecting important persons data...")
-        important_persons_data = self.collect_important_persons_pages()
+        important_persons_data = self._collect_collection_config("important_persons", "important_person_name")
         
         self.logger.info("3. Collecting political topic data...")
-        topic_wiki_data = self.collect_political_topics()
+        topic_wiki_data = self._collect_collection_config("political_topics", "political_topic_name")
         
         all_political_data.extend(politician_wiki_data)
         all_political_data.extend(important_persons_data)
