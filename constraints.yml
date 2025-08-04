@@ -1,7 +1,7 @@
 data_output:
   allowed_formats: ['csv', 'json', 'xlsx', 'excel']
 
-  incremental_saving:
+  database:
     min_batch_size: 1 # Low currently to allow testing
     max_batch_size: 1000
 

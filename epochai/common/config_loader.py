@@ -1,8 +1,7 @@
 import os
 import sys
 import yaml
-from typing import Any, Dict, List
-
+from typing import Any, Dict
 from epochai.common.config_validator import ValidateWholeConfig
 
 if sys.version_info >= (3, 0):
@@ -17,6 +16,7 @@ if sys.version_info >= (3, 0):
             pass
 
 class ConfigLoader:
+    
     @staticmethod
     def load_the_config() -> Dict[str, Any]:  
         """
@@ -71,7 +71,7 @@ class ConfigLoader:
         return config
         
     @staticmethod
-    def load_constraints_config():
+    def load_constraints_config() -> Dict[str, Any]:
         """Loads the constraints config"""
         current_dir = os.path.dirname(__file__)
         project_root = os.path.abspath(os.path.join(current_dir, '..', '..'))
@@ -107,7 +107,7 @@ class ConfigLoader:
         return merged_config
 
     @staticmethod
-    def override_default_config_values(defaults, overrides):
+    def override_default_config_values(defaults, overrides) -> Dict[str, Any]:
         """Recursively merges two dictionaries (default and specific) from config.yml"""
         
         if not isinstance(defaults, dict) or not isinstance(overrides, dict):
@@ -124,7 +124,8 @@ class ConfigLoader:
         return result
     
     @staticmethod
-    def get_data_config():
+    def get_data_config() -> Dict[str, Any]:
+        """Gets just the YAML data_settings portion of the config"""
         whole_config = ConfigLoader.load_the_config()
         
         data_settings_config = whole_config.get('data_settings', {})
@@ -132,8 +133,8 @@ class ConfigLoader:
         return data_settings_config
     
     @staticmethod
-    def get_wikipedia_collector_config():
-        """Get Wikipedia collector configuration with defaults applied and validate it"""
+    def get_wikipedia_yaml_config() -> Dict[str, Any]:
+        """Gets Wikipedia collector (YAML only) configuration with defaults applied and validates it"""
         config = ConfigLoader.load_the_config()
         
         merged_config = ConfigLoader.get_merged_config(config, 'wikipedia')
@@ -141,7 +142,7 @@ class ConfigLoader:
         return merged_config
         
     @staticmethod
-    def get_logging_config():
+    def get_logging_config() -> Dict[str, Any]:
         """Get logging configuration and validate it"""
         config = ConfigLoader.load_the_config()
         logging_config = config.get('logging', {
@@ -153,15 +154,34 @@ class ConfigLoader:
         return logging_config
     
     @staticmethod
-    def get_all_collector_configs():
+    def get_all_collector_configs() -> Dict[str, Any]:
         """Gets all collector configs"""
         
         all_configs = {}
         
         try:
-            all_configs['wikipedia'] = ConfigLoader.get_wikipedia_collector_config()
+            wikipedia_yaml_config = ConfigLoader.get_wikipedia_yaml_config()
+            collector_name = wikipedia_yaml_config['collector_name']
+            
+            from epochai.common.database.collection_config_manager import CollectionConfigManager
+            all_configs['wikipedia'] = CollectionConfigManager.get_combined_wikipedia_config(collector_name= collector_name)
         except Exception as e:
             print(f"Could not load wikipedia collector: '{e}'")
             all_configs['wikipedia'] = None
             
         return all_configs
+    
+    @staticmethod
+    def get_wikipedia_config() -> Dict[str, Any]:
+        """Gets whole Wikipedia Config (combination of YAML + DB) and returns it"""
+        wikipedia_yaml_config = ConfigLoader.get_wikipedia_yaml_config()
+        collector_name = wikipedia_yaml_config['api']['collector_name']
+        
+        from epochai.common.database.collection_config_manager import CollectionConfigManager
+        return CollectionConfigManager.get_combined_wikipedia_config(collector_name = collector_name)
+    
+    @staticmethod   
+    def get_collection_status_summary() -> Dict[str, Any]:
+        """Gets collection status summary"""
+        from epochai.common.database.collection_config_manager import CollectionConfigManager
+        return CollectionConfigManager.get_collection_configs_from_database()

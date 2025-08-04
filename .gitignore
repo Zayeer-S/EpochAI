@@ -33,3 +33,7 @@ logs/*
 # IDE
 .idea/
 vscode/
+
+# Migrations
+epochai/common/database/migrations/versions/*
+!epochai/common/database/migrations/versions/001_initial_schema.py

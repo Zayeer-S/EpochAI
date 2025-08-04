@@ -26,7 +26,7 @@ class DataUtils:
         except Exception as general_error:
             self.logger.error(f"General Error: {general_error}")
             
-    def _save_common(
+    def _get_save_variables(
     self,
     collected_data: List[Dict[str, Any]],
     data_type: str,
@@ -36,7 +36,7 @@ class DataUtils:
     incremental_saving: bool = None
     ) -> Optional[Tuple[str, str, bool]]:
         """
-        Common functionalities both incremental and at end save use
+        Various checks that save_at_end needs, done here due to seperation of concerns
         
         Notes:
             Checks if there is collected_data and validates it, gets config values
@@ -73,88 +73,6 @@ class DataUtils:
         
         return file_format, filepath, incremental_saving
             
-    def save_incrementally(
-        self,
-        collected_data: List[Dict[str, Any]],
-        data_type: str,
-    ) -> Optional[str]:
-        """
-        Saves data incrementally to the same file
-                
-        Args:
-            data_type (str): the type of data being collected by the collector
-        
-        Returns:
-            filepath (str) of the file where the save occurred
-            
-        Note:
-            Use this for large collections. Fails fast!
-        """
-        self.incremental_save_counter += 1
-        
-        result = self._save_common(
-            collected_data,
-            data_type,
-        )
-        if result is None:
-            self.logger.error(f"{self._save_common.__name__} returning as None for batch {self.incremental_save_counter}.")
-            exit(1)
-        
-        file_format, filepath, incremental_saving = result
-        
-        if not incremental_saving:
-            self.logger.error(f"Error incremental saving being called even though incremental_saving is False: {incremental_saving}")
-            return None
-        
-        self.logger.info("="*30)
-        self.logger.info(f"Save {self.incremental_save_counter}")
-        self.logger.info(f"Starting batch save of {len(collected_data)} articles")
-        
-        first_article = collected_data[0].get('title')
-        last_article = collected_data[-1].get('title')
-        self.logger.info(f"First article in batch: {first_article}")
-        self.logger.info(f"Last article in batch: {last_article}")
-        
-        df = pd.DataFrame(collected_data)
-        try:
-            file_format_lowered = file_format.lower()
-            
-            file_exists = os.path.exists(filepath)
-            
-            if file_format_lowered == 'json':
-                if file_exists:
-                    existing_df = pd.read_json(filepath, orient='records')
-                    combined_df = pd.concat([existing_df, df], ignore_index=True)
-                else:
-                    combined_df = df
-                combined_df.to_json(filepath, orient='records', indent=2)
-            elif file_format_lowered == 'xlsx' or file_format_lowered == 'excel':
-                if file_exists:
-                    existing_df = pd.read_excel(filepath)
-                    combined_df = pd.concat([existing_df, df], ignore_index=True)
-                else:
-                    combined_df = df
-                combined_df.to_excel(filepath, index=False)
-            else:
-                if file_format_lowered != 'csv':
-                    self.logger.warning(f"File format in config currently: {file_format} (code checked using '{file_format_lowered}') - Still saving data as .csv")
-                df.to_csv(
-                    filepath,
-                    mode='a',
-                    header=not file_exists,
-                    index=False
-                )
-                
-        except Exception as general_error:
-            self.logger.error(f"Error saving batch to '{filepath}': {general_error}")
-            return None
-        
-        self.logger.info (f"Batch appended to: {filepath}")
-        self.logger.info(f"Records in this batch: {len(df)}")
-        self.logger.info("="*30)
-        
-        return filepath
-    
     def save_at_end(
         self,
         collected_data: List[Dict[str, Any]],
@@ -170,16 +88,16 @@ class DataUtils:
             filepath (str) of the file where the save occurred
             
         Note:
-            Use this for small collections. Fails gracefully!
+            Use this for small collections. Fails gracefully at end
         """
         self.logger.info("Starting save attempt")
         
-        result = self._save_common(
+        result = self._get_save_variables(
             collected_data,
             data_type,
         )
         if result is None:
-            self.logger.error(f"{self._save_common.__name__} is returning None")
+            self.logger.error(f"{self._get_save_variables.__name__} is returning None")
             return None
         
         file_format, filepath, incremental_saving = result
