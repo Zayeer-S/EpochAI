@@ -1,5 +1,5 @@
 from pydantic import BaseModel, model_validator
-from typing import Dict, List, Set
+from typing import Dict, List, Optional, Set, Union
 
 class ConfigValidator:
     @staticmethod
@@ -135,29 +135,7 @@ class WikipediaApiConfig(BaseModel):
         return self
     
 class WikipediaConfig(BaseModel):
-    collection_years: List[int]
-    politicians: Dict[str, List[str]]
-    political_topics: Dict[str, List[str]]
-    political_events_template: Dict[str, List[str]]
     api: WikipediaApiConfig
-    
-    @model_validator(mode="after")
-    def validate_constraints(self):
-        constraints_config = ConfigValidator._get_constraints_config()
-        wikipedia_constraints = constraints_config.get('wikipedia')
-        
-        valid_language_codes = wikipedia_constraints.get('valid_2iso_language_codes')
-        
-        all_language_codes = set()
-        all_language_codes.update(self.politicians.keys())
-        all_language_codes.update(self.political_topics.keys())
-        all_language_codes.update(self.political_events_template.keys())
-        
-        invalid_language_codes = all_language_codes - set(valid_language_codes)
-        if invalid_language_codes:
-            raise ValueError(f"Invalid language codes: {invalid_language_codes}. Valid codes {valid_language_codes}")
-        
-        return self
     
 class ValidateWholeConfig(BaseModel):    
     data_settings: DataSettings
