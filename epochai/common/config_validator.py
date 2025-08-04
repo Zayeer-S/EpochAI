@@ -1,5 +1,5 @@
 from pydantic import BaseModel, model_validator
-from typing import Dict, List, Set
+from typing import Dict, List, Optional, Set, Union
 
 class ConfigValidator:
     @staticmethod
@@ -11,18 +11,18 @@ class ConfigValidator:
         from epochai.common.config_loader import ConfigLoader
         return ConfigLoader.load_constraints_config()
     
-class IncrementalSavingConfig(BaseModel):
-    enabled: bool
+class DatabaseConfig(BaseModel):
+    save_to_database: bool
     batch_size: int
     
     @model_validator(mode='after')
     def validate_using_constraints(self):
         constraints_config = ConfigValidator._get_constraints_config()
         
-        incremental_saving_config = constraints_config['data_output']['incremental_saving']
+        database = constraints_config['data_output']['database']
         
-        min_batch_size = incremental_saving_config['min_batch_size']
-        max_batch_size = incremental_saving_config['max_batch_size']
+        min_batch_size = database['min_batch_size']
+        max_batch_size = database['max_batch_size']
         
         if not (min_batch_size <= self.batch_size <= max_batch_size):
             raise ValueError(f"batch_size currently {self.batch_size}, must be: {min_batch_size} <= batch_size <= {max_batch_size}")
@@ -34,7 +34,7 @@ class DataOutputConfig(BaseModel):
     default_type_wikipedia: str
     separate_files_by_year: bool    
     file_format: str
-    incremental_saving: IncrementalSavingConfig
+    database: DatabaseConfig
     
     @model_validator(mode='after')
     def validate_using_constraints(self):
@@ -93,6 +93,7 @@ class LoggingConfig(BaseModel):
         return self
     
 class WikipediaApiConfig(BaseModel):
+    collector_name: str
     language: List[str]
     rate_limit_delay: float
     max_retries: int
@@ -134,29 +135,7 @@ class WikipediaApiConfig(BaseModel):
         return self
     
 class WikipediaConfig(BaseModel):
-    collection_years: List[int]
-    politicians: Dict[str, List[str]]
-    political_topics: Dict[str, List[str]]
-    political_events_template: Dict[str, List[str]]
     api: WikipediaApiConfig
-    
-    @model_validator(mode="after")
-    def validate_constraints(self):
-        constraints_config = ConfigValidator._get_constraints_config()
-        wikipedia_constraints = constraints_config.get('wikipedia')
-        
-        valid_language_codes = wikipedia_constraints.get('valid_2iso_language_codes')
-        
-        all_language_codes = set()
-        all_language_codes.update(self.politicians.keys())
-        all_language_codes.update(self.political_topics.keys())
-        all_language_codes.update(self.political_events_template.keys())
-        
-        invalid_language_codes = all_language_codes - set(valid_language_codes)
-        if invalid_language_codes:
-            raise ValueError(f"Invalid language codes: {invalid_language_codes}. Valid codes {valid_language_codes}")
-        
-        return self
     
 class ValidateWholeConfig(BaseModel):    
     data_settings: DataSettings
