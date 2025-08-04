@@ -11,3 +11,7 @@ x = file_name -> downgrade until that file
 x = -1 -> downgrade by one
 
 create new migration: alembic revision -m "file_name"
+
+tell alembic what current head is: alembic stamp x
+x = base -> base is nothing
+x = file_name -> base is this file_name
