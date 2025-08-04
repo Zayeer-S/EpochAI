@@ -1,8 +1,8 @@
 import time
 from datetime import datetime
 
-from epochai.common.config_loader import ConfigLoader
-from epochai.common.wikipedia_utils import WikipediaUtils
+from epochai.common.config.config_loader import ConfigLoader
+from epochai.common.utils.wikipedia_utils import WikipediaUtils
 from epochai.common.database.dao.debug_wikipedia_results_dao import DebugWikipediaResultsDAO
 from epochai.common.database.dao.collection_configs_dao import CollectionConfigsDAO
 from epochai.database_savers.wikipedia_saver import WikipediaSaver

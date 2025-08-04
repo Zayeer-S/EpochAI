@@ -233,7 +233,7 @@ class CollectionConfigManager:
             elif collector_name is not None:
                 cls.set_collector_name(collector_name)
             
-            from epochai.common.config_loader import ConfigLoader
+            from epochai.common.config.config_loader import ConfigLoader
             
             yaml_config = ConfigLoader.get_wikipedia_yaml_config()
             
