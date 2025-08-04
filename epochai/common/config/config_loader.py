@@ -2,7 +2,7 @@ import os
 import sys
 import yaml
 from typing import Any, Dict
-from epochai.common.config_validator import ValidateWholeConfig
+from epochai.common.config.config_validator import ValidateWholeConfig
 
 if sys.version_info >= (3, 0):
     import locale
@@ -18,6 +18,14 @@ if sys.version_info >= (3, 0):
 class ConfigLoader:
     
     @staticmethod
+    def _get_config_path(filename: str) -> str:
+        """Gets config path of config.yml and constraints.yml"""
+        current_dir = os.path.dirname(__file__)
+        project_root = os.path.abspath(os.path.join(current_dir, '..', '..', '..'))
+        config_path = os.path.join(project_root, f'{filename}')
+        return config_path
+    
+    @staticmethod
     def load_the_config() -> Dict[str, Any]:  
         """
         Loads the config from config.yaml
@@ -25,9 +33,7 @@ class ConfigLoader:
         Returns:
             Validated config (validated via helper function and config_validator)
         """
-        current_dir = os.path.dirname(__file__)
-        project_root = os.path.abspath(os.path.join(current_dir, '..', '..'))
-        config_path = os.path.join(project_root, 'config.yml')
+        config_path = ConfigLoader._get_config_path('config.yml')
         
         try:
             with open(config_path, 'r', encoding='utf-8') as file:
@@ -73,9 +79,7 @@ class ConfigLoader:
     @staticmethod
     def load_constraints_config() -> Dict[str, Any]:
         """Loads the constraints config"""
-        current_dir = os.path.dirname(__file__)
-        project_root = os.path.abspath(os.path.join(current_dir, '..', '..'))
-        config_path = os.path.join(project_root, 'constraints.yml')
+        config_path = ConfigLoader._get_config_path("constraints.yml")
         
         try:
             with open(config_path, 'r') as file:
