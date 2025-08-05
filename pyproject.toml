@@ -85,6 +85,8 @@ ignore = [
     "C901",
     # Allow print statements (remove if you want to enforce no prints)
     "T201",
+    # ALlow unneccesary var assignments
+    "RET504",
 ]
 
 # Allow fix for all enabled rules (when `--fix`) is provided
@@ -116,8 +118,3 @@ known-first-party = ["epochai"]
 # Allow print in scripts
 "epochai/data_collection/*.py" = ["T201"]
 "app/*.py" = ["T201"]
-
-[tool.bandit]
-# Bandit security linter configuration
-exclude_dirs = ["tests", "epochai/common/database/migrations"]
-skips = ["B101", "B601"]
