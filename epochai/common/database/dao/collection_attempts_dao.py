@@ -1,17 +1,18 @@
-from datetime import datetime,timedelta
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
 
 from epochai.common.database.database import get_database
 from epochai.common.database.models import CollectionAttempts
 from epochai.common.logging_config import get_logger
 
+
 class CollectionAttemptsDAO:
     """DAO for collection_attempts table"""
-    
+
     def __init__(self):
         self.db = get_database()
         self.logger = get_logger(__name__)
-        
+
     def create_attempt(
         self,
         collection_config_id: int,
@@ -19,97 +20,110 @@ class CollectionAttemptsDAO:
         search_term_used: str,
         attempt_status_id: int,
         error_type_id: Optional[int] = None,
-        error_message: str = ""
+        error_message: str = "",
     ) -> Optional[int]:
         """
         Creates a new collection attempt record
-        
+
         Returns:
             ID of created attempt or None if failed
         """
-        
+
         query = """
             INSERT INTO collection_attempts
             (collection_config_id, language_code_used, search_term_used, attempt_status_id, error_type_id, error_message, created_at)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
             RETURNING id
-        """
-        
+        """  # noqa
+
         try:
             current_timestamp = datetime.now()
-            params = (collection_config_id, language_code_used, search_term_used, attempt_status_id, error_type_id, error_message, current_timestamp)
+            params = (
+                collection_config_id,
+                language_code_used,
+                search_term_used,
+                attempt_status_id,
+                error_type_id,
+                error_message,
+                current_timestamp,
+            )
             result = self.db.execute_insert_query(query, params)
-            
+
             if result:
-                self.logger.info(f"Created collection attempt for config '{collection_config_id}': {search_term_used} ({language_code_used})")
+                self.logger.info(
+                    f"Created collection attempt for config '{collection_config_id}': {search_term_used} ({language_code_used})",  # noqa
+                )
                 return result
-            else:
-                self.logger.error(f"Failed to create collection attempt for config '{collection_config_id}': {search_term_used} ({language_code_used})")
-                return None
-            
-        except Exception as general_error:
-            self.logger.error(f"Error creatiing collection attempt for config '{collection_config_id}' (search term used: {search_term_used} ({language_code_used}): {general_error}")
+            self.logger.error(
+                f"Failed to create collection attempt for config '{collection_config_id}': {search_term_used} ({language_code_used})",  # noqa
+            )
             return None
-        
+
+        except Exception as general_error:
+            self.logger.error(
+                f"Error creatiing collection attempt for config '{collection_config_id}' (search term used: {search_term_used} ({language_code_used}): {general_error}",  # noqa
+            )
+            return None
+
     def get_by_id(
         self,
-        attempt_id: int
+        attempt_id: int,
     ) -> Optional[CollectionAttempts]:
         """Gets collection attempt by ID"""
-        
+
         query = """
             SELECT * FROM collection_attempts WHERE id = %s
         """
-        
+
         try:
             results = self.db.execute_select_query(query, (attempt_id,))
             if results:
                 return CollectionAttempts.from_dict(results[0])
             return None
-        
+
         except Exception as general_error:
             self.logger.error(f"Error getting collection attempt by id '{attempt_id}': {general_error}")
             return None
-        
+
     def get_all(self) -> List[CollectionAttempts]:
         """Gets all collection attempts"""
-        
+
         query = """
             SELECT * FROM collection_attempts ORDER BY created_at DESC
         """
-        
+
         try:
             results = self.db.execute_select_query(query)
             return [CollectionAttempts.from_dict(row) for row in results]
-        
+
         except Exception as general_error:
             self.logger.error(f"Error getting all collection attempts: {general_error}")
             return []
-        
+
     def get_by_config_id(
         self,
-        collection_config_id: int
+        collection_config_id: int,
     ) -> List[CollectionAttempts]:
         """Gets all attempts for a specific collection config"""
-        
+
         query = """
             SELECT * FROM collection_attempts WHERE collection_config_id = %s ORDER BY created_at DESC
         """
-        
+
         try:
             results = self.db.execute_select_query(query, (collection_config_id,))
             return [CollectionAttempts.from_dict(row) for row in results]
-        
+
         except Exception as general_error:
             self.logger.error(f"Error getting attempts for config '{collection_config_id}': {general_error}")
             return []
-        
+
     def get_by_status(
         self,
-        attempt_status_name: str
+        attempt_status_name: str,
     ) -> List[CollectionAttempts]:
         """Gets attempts by status name"""
-        
+
         query = """
             SELECT ca.*
             FROM collection_attempts ca
@@ -117,55 +131,57 @@ class CollectionAttemptsDAO:
             WHERE ast.attempt_status_name = %s
             ORDER BY ca.created_at DESC
         """
-        
+
         try:
             results = self.db.execute_select_query(query, (attempt_status_name,))
             attempts = [CollectionAttempts.from_dict(row) for row in results]
-            
+
             self.logger.info(f"Found {len(attempts)} attempts with status '{attempt_status_name}'")
             return attempts
-        
+
         except Exception as general_error:
             self.logger.error(f"Error getting attempts by status '{attempt_status_name}': {general_error}")
             return []
-        
+
     def get_failed_attempts(self) -> List[CollectionAttempts]:
         """Gets all failed collection attempts by calling get_by_status"""
         return self.get_by_status("failed")
-        
+
     def get_successful_attempts(self) -> List[CollectionAttempts]:
         """Gets all successful collection attempts by calling get_by_status"""
         return self.get_by_status("success")
-        
+
     def get_latest_attempt_for_config(
         self,
-        collection_config_id: int
+        collection_config_id: int,
     ) -> Optional[CollectionAttempts]:
         """Gets the latest attempt for a specific config"""
-        
+
         query = """
             SELECT * FROM collection_attempts
             WHERE collection_config_id = %s
             ORDER BY created_at DESC
             LIMIT 1
         """
-        
+
         try:
             results = self.db.execute_select_query(query, (collection_config_id,))
             if results:
                 return CollectionAttempts.from_dict(results[0])
             return None
-        
+
         except Exception as general_error:
-            self.logger.error(f"Error getting latest attempt for config '{collection_config_id}': {general_error}")
+            self.logger.error(
+                f"Error getting latest attempt for config '{collection_config_id}': {general_error}",
+            )
             return None
-        
+
     def get_attempts_by_error_type(
         self,
-        error_type_name: str
+        error_type_name: str,
     ) -> List[CollectionAttempts]:
         """Gets attempts by error type name"""
-        
+
         query = """
             SELECT ca.*
             FROM collection_attempts ca
@@ -173,24 +189,24 @@ class CollectionAttemptsDAO:
             WHERE et.error_type_name = %s
             ORDER BY ca.created_at DESC
         """
-        
+
         try:
             results = self.db.execute_select_query(query, (error_type_name,))
             attempts = [CollectionAttempts.from_dict(row) for row in results]
-            
+
             self.logger.info(f"Found {len(attempts)} attempts with error type '{error_type_name}'")
             return attempts
-        
+
         except Exception as general_error:
             self.logger.error(f"Error getting attempts by error type '{error_type_name}': {general_error}")
             return []
-        
+
     def get_attempts_with_details(
         self,
-        limit: Optional[int] = None
+        limit: Optional[int] = None,
     ) -> List[Dict[str, Any]]:
         """Gets attempts with full details"""
-        
+
         query = """
             SELECT
                 ca.*,
@@ -205,22 +221,22 @@ class CollectionAttemptsDAO:
             LEFT JOIN collection_types ct ON cc.collection_type_id = ct.id
             ORDER BY ca.created_at DESC
         """
-        
+
         if limit:
             query += f" LIMIT {limit}"
-            
+
         try:
             results = self.db.execute_select_query(query)
             self.logger.info(f"Retrieved {len(results)} attempts with full details")
             return results
-        
+
         except Exception as general_error:
             self.logger.error(f"Error getting attempts with full details: {general_error}")
             return []
-        
+
     def get_failed_configs_for_retry(self) -> List[Dict[str, Any]]:
         """Gets collection configs that have only failed attempts and need retry"""
-        
+
         query = """
             SELECT DISTINCT
                 cc.id as config_id,
@@ -244,19 +260,19 @@ class CollectionAttemptsDAO:
                 SELECT id FROM attempt_statuses WHERE attempt_status_name = 'failed'
             )
         """
-        
+
         try:
             results = self.db.execute_select_query(query)
             self.logger.info(f"Found {len(results)} configs that failed and need retry")
             return results
-            
+
         except Exception as general_error:
             self.logger.error(f"Error getting failed configs for retry: {general_error}")
             return []
-        
+
     def get_attempt_statistics(self) -> Dict[str, Any]:
         """Gets comprehensive stats about data collection attempts"""
-        
+
         query = """
             SELECT
                 ast.attempt_status_name,
@@ -267,7 +283,7 @@ class CollectionAttemptsDAO:
             GROUP BY ast.attempt_status_name
             ORDER BY attempt_count DESC
         """
-        
+
         error_state_query = """
             SELECT
                 et.error_type_name,
@@ -280,120 +296,120 @@ class CollectionAttemptsDAO:
             GROUP BY et.error_type_name
             ORDER BY error_count DESC
         """
-        
+
         try:
             status_stats = self.db.execute_select_query(query)
             error_stats = self.db.execute_select_query(error_state_query)
-            
-            total_attempts = sum(row['attempt_count'] for row in status_stats)
-            
+
+            total_attempts = sum(row["attempt_count"] for row in status_stats)
+
             stats = {
-                'total_attempts': total_attempts,
-                'by_status': status_stats,
-                'by_error_type': error_stats,
-                'summary': {}
+                "total_attempts": total_attempts,
+                "by_status": status_stats,
+                "by_error_type": error_stats,
+                "summary": {},
             }
-            
+
             for status_row in status_stats:
-                status_name = status_row['attempt_status_name']
-                count = status_row['attempt_count']
+                status_name = status_row["attempt_status_name"]
+                count = status_row["attempt_count"]
                 percentage = round((count / total_attempts * 100), 2) if total_attempts > 0 else 0
-                
-                stats['summary'][status_name] = {
-                    'count': count,
-                    'percentage': percentage
+
+                stats["summary"][status_name] = {
+                    "count": count,
+                    "percentage": percentage,
                 }
-                
+
             return stats
-        
+
         except Exception as general_error:
             self.logger.error(f"Error getting attempt statistics: {general_error}")
-            return {'total_attempts': 0, 'by_status': [], 'by_error_type': [], 'summary': {}}
-        
+            return {"total_attempts": 0, "by_status": [], "by_error_type": [], "summary": {}}
+
     def delete_attempts_for_config(
         self,
-        collection_config_id: int
+        collection_config_id: int,
     ) -> int:
         """Deletes all attempts for a specific config"""
-        
+
         query = """
             DELETE FROM collection_attempts WHERE collection_config_id = %s
         """
-        
+
         try:
             affected_rows = self.db.execute_update_delete_query(query, (collection_config_id,))
-            
+
             if affected_rows > 0:
                 self.logger.info(f"Deleted {affected_rows} attempts for config {collection_config_id}")
             else:
                 self.logger.warning(f"No attempts found for config {collection_config_id} to delete")
-                
+
             return affected_rows
-        
+
         except Exception as general_error:
             self.logger.error(f"Error deleting attempts for config {collection_config_id}: {general_error}")
             return 0
-        
+
     def delete_old_attempts(
         self,
-        days_old: int
+        days_old: int,
     ) -> int:
         """Deletes attempts older than specified days"""
-        
+
         query = """
             DELETE FROM collection_attempts
             WHERE created_at < %s
         """
-        
+
         try:
             cutoff_date = datetime.now() - timedelta(days=days_old)
             affected_rows = self.db.execute_update_delete_query(query, (cutoff_date,))
-            
+
             if affected_rows > 0:
                 self.logger.info(f"Deleted {affected_rows} attempts older than {days_old} days")
-                
+
             return affected_rows
-        
+
         except Exception as general_error:
             self.logger.error(f"Error deleting old attempts: {general_error}")
             return 0
-        
+
     def search_by_term(
         self,
-        search_term_used: str
-        ) -> List[CollectionAttempts]:
+        search_term_used: str,
+    ) -> List[CollectionAttempts]:
         """Search attempts by search term used"""
-        
+
         query = """
             SELECT * FROM collection_attempts WHERE search_term_used ILIKE %s ORDER BY created_at DESC
         """
-        
+
         try:
             search_pattern = f"%{search_term_used}%"
             results = self.db.execute_select_query(query, (search_pattern,))
             return [CollectionAttempts.from_dict(row) for row in results]
-        
+
         except Exception as general_error:
             self.logger.error(f"Error searching attempts by term '{search_term_used}': {general_error}")
             return []
-            
+
     def get_recent_attempts(
         self,
-        hours: int = 24
+        hours: int = 24,
     ) -> List[CollectionAttempts]:
         """Gets attempts from the last X hours"""
-        
+
         query = """
             SELECT * FROM collection_attempts
             WHERE created_at >= %s
             ORDER BY created_at DESC
         """
-        
+
         try:
             cutoff_time = datetime.now() - timedelta(hours=hours)
             results = self.db.execute_select_query(query, (cutoff_time,))
             return [CollectionAttempts.from_dict(row) for row in results]
-        
+
         except Exception as general_error:
             self.logger.error(f"Error getting recent attempts from last {hours} hours: {general_error}")
             return []

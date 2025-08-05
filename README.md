@@ -29,7 +29,7 @@ The StocksAI transforms political predictions into market forecasts by:
 - **Togglable Prediction Integration**: Allows switching PoliticsAI inputs on/off for comparative analysis
 - **Temporal Forecasting**: Provides short-term (1-7 days), medium-term (1-4 weeks), and long-term (1-3 months) predictions
 
-## Planned Development Phases	
+## Planned Development Phases
 
 ### Phase 1: Overall Project Planning (In Progress)
 - [x] Project scoping and planning
@@ -41,14 +41,14 @@ The StocksAI transforms political predictions into market forecasts by:
 ### Phase 2: PoliticsAI Development
 - [] Politician profile modelling component
 - [] Inter-leader relationship modelling component
-- [] Opinion poll and minor election 
+- [] Opinion poll and minor election
 - [] Historical political action analysis component
 - [] Feature engineering pipeline
 - [] Initial model prototyping
 - [] Performance evaluation
 
 ### Phase 3: StocksAI Development (Planned)
-- [] Market data integration 
+- [] Market data integration
 - [] Sector specific analysis component
 - [] Innovations analysis component
 - [] Confirmed political event analysis component
