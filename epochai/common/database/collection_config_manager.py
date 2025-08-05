@@ -80,7 +80,7 @@ class CollectionConfigManager:
                 else:
                     collection_configs = [c for c in collection_configs if not c.is_collected]
 
-            grouped_configs = {}
+            grouped_configs: Dict[str, Any] = {}
 
             for each_config in collection_configs:
                 collection_type_obj = cls._collection_types_dao.get_by_id(each_config.collection_type_id)

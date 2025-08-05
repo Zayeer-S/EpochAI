@@ -185,7 +185,7 @@ class CollectionConfigsDAO:
         Gets all uncolected configs grouped by language for easier processing
         """
         configs = self.get_uncollected_by_type(collection_type)
-        grouped = {}
+        grouped: Dict[str, List[CollectionConfigs]] = {}
 
         for config in configs:
             if config.language_code not in grouped:
@@ -317,22 +317,22 @@ class CollectionConfigsDAO:
         try:
             results = self.db.execute_select_query(query)
 
-            stats = {
-                "by_type_and_language": results,
-                "summary": {},
-            }
-
             total_configs = sum(row["total_configs"] for row in results)
             total_collected = sum(row["collected_count"] for row in results)
             total_uncollected = sum(row["uncollected_count"] for row in results)
 
-            stats["summary"] = {
+            summary = {
                 "total_configs": total_configs,
                 "total_collected": total_collected,
                 "total_uncollected": total_uncollected,
                 "collection_percentage": round((total_collected / total_configs * 100), 2)
                 if total_configs > 0
                 else 0,
+            }
+
+            stats = {
+                "by_type_and_language": results,
+                "summary": summary,
             }
 
             return stats

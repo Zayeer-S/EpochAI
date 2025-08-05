@@ -122,8 +122,8 @@ class DatabaseConnection:
     ) -> List[Dict[str, Any]]:
         """Executes SELECT query and returns its results"""
         with self.get_cursor() as cursor:
-            cursor.execute(query, params)
-            return cursor.fetchall()
+            results: List[Dict[str, Any]] = cursor.execute(query, params)
+            return results
 
     def execute_insert_query(
         self,
@@ -147,7 +147,7 @@ class DatabaseConnection:
                 inserted_id = cursor.rowcount
 
             self._connection.commit()
-            return inserted_id
+            return int(inserted_id)
 
     def execute_update_delete_query(
         self,
@@ -159,7 +159,7 @@ class DatabaseConnection:
             cursor.execute(query, params)
             affected_rows = cursor.rowcount
             self._connection.commit()
-            return affected_rows
+            return int(affected_rows)
 
     def execute_transaction(
         self,
