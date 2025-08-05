@@ -342,11 +342,13 @@ class CollectedContentsDAO:
             validation_stats = self.db.execute_select_query(validation_stats_query)
             type_stats = self.db.execute_select_query(type_stats_query)
 
+            summary: Dict[str, Any] = {}
+
             stats = {
                 "basic_stats": basic_stats[0] if basic_stats else {},
                 "by_validation_status": validation_stats,
                 "by_content_type": type_stats,
-                "summary": {},
+                "summary": summary,
             }
 
             if basic_stats and basic_stats[0]["total_contents"]:
@@ -357,7 +359,7 @@ class CollectedContentsDAO:
                     count_of_contents = status_row["content_count"]
                     percentage = round((count_of_contents / total_contents * 100), 2)
 
-                    stats["summary"][status_name] = {
+                    summary[status_name] = {
                         "count": count_of_contents,
                         "percentage": percentage,
                     }

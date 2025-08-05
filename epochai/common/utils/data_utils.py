@@ -205,11 +205,12 @@ class DataUtils:
         Returns:
             bool: True if all validation passes, False if otherwise
         """
+        if not isinstance(collected_data, list):
+            # mypy falsely thinks this is unreachable code, ignore for defensive programming
+            self.logger.error(f"Data validation failed; Expected list but got {type(collected_data)}")  # type: ignore[unreachable]
+            return False
         if not collected_data:
             self.logger.error("Data validation failed as no data was provided.")
-            return False
-        if not isinstance(collected_data, list):
-            self.logger.error(f"Data validation failed; Expected list but got {type(collected_data)}")
             return False
 
         if required_fields is None:
@@ -225,7 +226,8 @@ class DataUtils:
 
         for i, record in enumerate(collected_data):
             if not isinstance(record, dict):
-                validation_errors.append(f"Record {i}: Expected dict but got type {type(record)}")
+                # mypy falsely thinks this is unreachable code, ignore for defensive programming
+                validation_errors.append(f"Record {i}: Expected dict but got type {type(record)}")  # type: ignore[unreachable]
                 continue
 
             missing_fields = required_fields - set(record.keys())

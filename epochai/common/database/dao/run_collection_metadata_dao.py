@@ -169,13 +169,15 @@ class RunCollectionMetadataDAO:
         try:
             results = self.db.execute_select_query(query)
 
+            summary: Dict[str, Any] = {
+                "total_runs": sum(row["run_count"] for row in results),
+                "avg_success_rate": 0,
+                "avg_duration_minutes": 0,
+            }
+
             stats = {
                 "performance_by_type_and_status": results,
-                "summary": {
-                    "total_runs": sum(row["run_count"] for row in results),
-                    "avg_success_rate": 0,
-                    "avg_duration_minutes": 0,
-                },
+                "summary": summary,
             }
 
             if results:
@@ -185,7 +187,7 @@ class RunCollectionMetadataDAO:
                 )
 
                 if total_attempts > 0:
-                    stats["summary"]["avg_success_rate"] = round((total_successful / total_attempts * 100), 2)
+                    summary["avg_success_rate"] = round((total_successful / total_attempts * 100), 2)
 
                 weighted_duration = sum(
                     row["avg_duration_minutes"] * row["run_count"]
@@ -197,7 +199,7 @@ class RunCollectionMetadataDAO:
                 )
 
                 if total_runs_with_duration > 0:
-                    stats["summary"]["avg_duration_minutes"] = round(
+                    summary["avg_duration_minutes"] = round(
                         weighted_duration / total_runs_with_duration,
                         2,
                     )

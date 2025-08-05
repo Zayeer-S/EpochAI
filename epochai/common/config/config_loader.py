@@ -30,6 +30,7 @@ class ConfigLoader:
         Returns:
             Validated config (validated via helper function and config_validator)
         """
+        config: Dict[str, Any]
         config_path = ConfigLoader._get_config_path("config.yml")
 
         try:
@@ -78,6 +79,7 @@ class ConfigLoader:
     @staticmethod
     def load_constraints_config() -> Dict[str, Any]:
         """Loads the constraints config"""
+        constraints_config: Dict[str, Any]
         config_path = ConfigLoader._get_config_path("constraints.yml")
 
         try:
@@ -107,16 +109,27 @@ class ConfigLoader:
             Merged config (default config settings overriden by override config)
         """
         defaults = config.get("defaults").get(config_name)
+        if defaults is None:
+            raise ValueError(f"No 'defaults' section found in config for '{config_name}'")
+
         main_config = config.get(config_name)
+        if main_config is None:
+            raise ValueError(f"No '{config_name}' section found in config")
+
         merged_config = ConfigLoader.override_default_config_values(defaults, main_config)
         return merged_config
 
     @staticmethod
-    def override_default_config_values(defaults, overrides) -> Dict[str, Any]:
+    def override_default_config_values(
+        defaults: Dict[str, Any],
+        overrides: Dict[str, Any],
+    ) -> Dict[str, Any]:
         """Recursively merges two dictionaries (default and specific) from config.yml"""
+        result: Dict[str, Any]
 
+        # mypy thinks this is unreachable so tell it to ignore
         if not isinstance(defaults, dict) or not isinstance(overrides, dict):
-            return overrides
+            return overrides  # type: ignore[unreachable]
 
         result = defaults.copy()
 
@@ -133,7 +146,7 @@ class ConfigLoader:
         """Gets just the YAML data_settings portion of the config"""
         whole_config = ConfigLoader.load_the_config()
 
-        data_settings_config = whole_config.get("data_settings", {})
+        data_settings_config: Dict[str, Any] = whole_config.get("data_settings", {})
 
         return data_settings_config
 
@@ -150,7 +163,7 @@ class ConfigLoader:
     def get_logging_config() -> Dict[str, Any]:
         """Get logging configuration and validate it"""
         config = ConfigLoader.load_the_config()
-        logging_config = config.get(
+        logging_config: Dict[str, Any] = config.get(
             "logging",
             {
                 "level": "INFO",

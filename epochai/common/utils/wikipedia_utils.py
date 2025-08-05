@@ -107,7 +107,7 @@ class WikipediaUtils:
                 self.logger.info(
                     f"Found {len(search_results)} search results for '{query}': {search_results}",
                 )
-                return search_results
+                return list(search_results)
             self.logger.warning(f"No results found for '{query}' in '{language_code}'")
             return []
 
@@ -154,7 +154,7 @@ class WikipediaUtils:
                 'language_code': [null]
         """
 
-        results_by_language = {}
+        results_by_language: Dict[str, List[Any]] = {}
 
         for language_code, items in items_by_language_code.items():
             if not items:
@@ -193,8 +193,8 @@ class WikipediaUtils:
         """
         Handles disambiguation errors by trying different options
         """
-        max_retries = self.config["api"]["max_retries"]
-        search_max_results = self.config["api"]["search_max_results"]
+        max_retries = int(self.config["api"]["max_retries"])
+        search_max_results = int(self.config["api"]["search_max_results"])
 
         if recursive_limit is None:
             recursive_limit = self.config["api"]["recursive_limit"]
@@ -205,7 +205,7 @@ class WikipediaUtils:
             return None
 
         self.logger.warning(
-            f"Disambiguation for page title '{page_title}' in '{language_code}'. Options: {options[:{search_max_results}]}",  # noqa
+            f"Disambiguation for page title '{page_title}' in '{language_code}'. Options: {options[:search_max_results]}",  # noqa
         )
 
         for option in options[:max_retries]:
