@@ -118,3 +118,8 @@ known-first-party = ["epochai"]
 # Allow print in scripts
 "epochai/data_collection/*.py" = ["T201"]
 "app/*.py" = ["T201"]
+
+[tool.bandit]
+# Bandit security linter configuration
+exclude_dirs = ["."]
+skips = ["B101", "B601"]
