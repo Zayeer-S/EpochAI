@@ -38,6 +38,9 @@ EpochAI/
 ├── docs/                                               # Documentation
 │   ├── architecture/                                   # Architecture diagrams
 │   │   ├── STRUCTURE.md                                # File structure
+│   ├── cheatsheets/                                    # Command cheatsheets of various packages
+│   │   ├── ALEMBIC_CHEATSHEET.md
+│   │   ├── PRECOMMIT_CHEATSHEET.md
 │   ├── diagrams/                                       # Architecture diagrams
 │   │   ├── ERD.drawio.png                              # File structure in png format
 │   │   ├── ERD.drawio.xml                              # File structure in xml to allow for future editing
