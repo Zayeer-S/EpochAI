@@ -33,6 +33,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install ruff mypy bandit
+        pip install types-requests types-PyYAML
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
     - name: Run Ruff linter
@@ -45,8 +46,7 @@ jobs:
 
     - name: Run MyPy type checker
       run: |
-        mypy epochai/ --ignore-missing-imports --no-strict-optional
-      continue-on-error: true
+        mypy epochai/ app/
 
     - name: Run Bandit security linter
       run: |
