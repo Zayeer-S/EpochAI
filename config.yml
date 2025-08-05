@@ -16,11 +16,11 @@ data_settings:
       save_to_database: true # True = Save to database incrementally. False = Save to file at end
       batch_size: 10
 
-  data_validator: 
+  data_validator:
     validate_before_save: False # True = Yes, validate before saving (and vice versa)
     min_content_length: 10
     error_logging_limit: 10
-    utf8_corruption_patterns: [ 
+    utf8_corruption_patterns: [
       'Ã©', 'Ã¨', 'Ã ', 'Ã¡', 'Ã¢', 'Ã¤', 'Ã§', 'Ã¯', 'Ã´', 'Ã¹', 'Ã»', 'Ã¼', 'â€™', 'â€œ', 'â€', 'â€¢', 'â€"', 'â€"', 'Â', 'Ž', 'â€ž', 'â€º'
     ]
     required_fields_wikipedia: ['title', 'content', 'url', 'language', 'collected_at']
@@ -35,7 +35,7 @@ defaults:
       max_retries: 3
       search_max_results: 5
       request_timeout: 30
-      recursive_limit: 1 
+      recursive_limit: 1
 
 # Fine tune Wikipedia API config settings
 wikipedia:
@@ -45,4 +45,4 @@ wikipedia:
     rate_limit_delay: 0.5
     max_retries: 5
     search_max_results: 10
-    request_timeout: 10  
+    request_timeout: 10

@@ -1,9 +1,10 @@
+from datetime import datetime
 import logging
 import os
-from datetime import datetime
+
 
 def setup_logging(log_level="INFO", log_to_file=True, log_dir="logs"):
-    """ 
+    """
     Sets up centralized logging configuration for the entire project
 
     Args:
@@ -11,49 +12,50 @@ def setup_logging(log_level="INFO", log_to_file=True, log_dir="logs"):
         log_to_file (bool): Whether to log to file in addition to the console
         log_dir (str): The directory to store the log files
     """
-    
+
     if log_to_file:
         current_dir = os.path.dirname(__file__)
-        project_root = os.path.abspath(os.path.join(current_dir, '..', '..'))
+        project_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
         log_dir = os.path.join(project_root, log_dir)
         os.makedirs(log_dir, exist_ok=True)
-        
+
     root_logger = logging.getLogger()
     root_logger.setLevel(getattr(logging, log_level.upper()))
-    
+
     root_logger.handlers.clear()
-    
-    formatter = logging.Formatter(  
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        datefmt="%Y-%m-%d %H:%M:%S"
+
+    formatter = logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
     )
-    
+
     console_handler = logging.StreamHandler()
     console_handler.setLevel(getattr(logging, log_level.upper()))
     console_handler.setFormatter(formatter)
     root_logger.addHandler(console_handler)
-    
+
     if log_to_file:
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         log_filename = f"predictai_{timestamp}.log"
         log_filepath = os.path.join(log_dir, log_filename)
-        
+
         file_handler = logging.FileHandler(log_filepath)
         file_handler.setLevel(getattr(logging, log_level.upper()))
         file_handler.setFormatter(formatter)
         root_logger.addHandler(file_handler)
-        
+
         logging.info(f"Logging to file: {log_filepath}")
-        
+
+
 def get_logger(name):
     """
     Get a logger for a specific module
 
     Args:
         name (str): __name__ of the calling module
-        
+
     Returns:
         logging.Logger: Configured logger instance
     """
-    
+
     return logging.getLogger(name)
