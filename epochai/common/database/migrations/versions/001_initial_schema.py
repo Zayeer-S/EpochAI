@@ -16,7 +16,7 @@ def upgrade():
             created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
         );
     """)
-    
+
     op.execute("""
         CREATE TABLE IF NOT EXISTS collection_types(
             id SERIAL PRIMARY KEY,
@@ -25,7 +25,7 @@ def upgrade():
             created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
         );
     """)
-    
+
     op.execute("""
         CREATE TABLE IF NOT EXISTS attempt_statuses (
             id SERIAL PRIMARY KEY,
@@ -34,7 +34,7 @@ def upgrade():
             created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
         );
     """)
-    
+
     op.execute("""
         CREATE TABLE IF NOT EXISTS error_types (
             id SERIAL PRIMARY KEY,
@@ -43,7 +43,7 @@ def upgrade():
             created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
         );
     """)
-    
+
     op.execute("""
         CREATE TABLE IF NOT EXISTS validation_statuses (
             id SERIAL PRIMARY KEY,
@@ -52,7 +52,7 @@ def upgrade():
             created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
         );
     """)
-    
+
     op.execute("""
         CREATE TABLE IF NOT EXISTS collected_content_types (
             id SERIAL PRIMARY KEY,
@@ -61,7 +61,7 @@ def upgrade():
             created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
         );
     """)
-    
+
     op.execute("""
         CREATE TABLE IF NOT EXISTS run_types (
             id SERIAL PRIMARY KEY,
@@ -70,7 +70,7 @@ def upgrade():
             created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
         );
     """)
-    
+
     op.execute("""
         CREATE TABLE IF NOT EXISTS run_statuses (
             id SERIAL PRIMARY KEY,
@@ -79,7 +79,7 @@ def upgrade():
             created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
         );
     """)
-    
+
     op.execute("""
         CREATE TABLE IF NOT EXISTS content_metadata_schemas (
             id SERIAL PRIMARY KEY,
@@ -88,7 +88,7 @@ def upgrade():
             created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
         );
     """)
-    
+
     # MAIN TABLES
     op.execute("""
         CREATE TABLE IF NOT EXISTS collection_configs(
@@ -104,7 +104,7 @@ def upgrade():
             CONSTRAINT ensure_collection_config_is_unique UNIQUE(collector_name_id, collection_type_id, language_code, collection_name)
         );
     """)
-    
+
     op.execute("""
         CREATE TABLE IF NOT EXISTS collection_attempts(
             id SERIAL PRIMARY KEY,
@@ -117,7 +117,7 @@ def upgrade():
             created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
         );
     """)
-    
+
     op.execute("""
         CREATE TABLE IF NOT EXISTS collected_contents (
             id SERIAL PRIMARY KEY,
@@ -133,7 +133,7 @@ def upgrade():
             created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
         );
     """)
-    
+
     op.execute("""
         CREATE TABLE IF NOT EXISTS collected_content_metadata (
             id SERIAL PRIMARY KEY,
@@ -144,9 +144,9 @@ def upgrade():
             CONSTRAINT unique_content_metadata UNIQUE (collected_content_id, metadata_key)
         );
     """)
-    
+
     op.execute("""
-        CREATE TABLE IF NOT EXISTS debug_wikipedia_results ( 
+        CREATE TABLE IF NOT EXISTS debug_wikipedia_results (
             id SERIAL PRIMARY KEY,
             collection_config_id INTEGER NOT NULL REFERENCES collection_configs(id) ON DELETE CASCADE,
             search_term_used TEXT NOT NULL,
@@ -158,7 +158,7 @@ def upgrade():
             created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
         );
     """)
-    
+
     op.execute("""
         CREATE TABLE IF NOT EXISTS run_collection_metadata (
             id SERIAL PRIMARY KEY,
@@ -172,7 +172,7 @@ def upgrade():
             created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
         );
     """)
-    
+
     op.execute("""
         CREATE TABLE IF NOT EXISTS link_attempts_to_runs (
             id SERIAL PRIMARY KEY,
@@ -182,7 +182,7 @@ def upgrade():
             CONSTRAINT unique_attempt_to_runs UNIQUE (collection_attempt_id, run_collection_metadata_id)
         );
     """)
-    
+
     # INDEXES
     op.execute("""
         CREATE INDEX IF NOT EXISTS idx_collection_configs_collector_types ON collection_configs(collector_name_id, collection_type_id);
@@ -247,7 +247,7 @@ def upgrade():
     op.execute("""
         CREATE INDEX IF NOT EXISTS idx_link_attempts_to_runs_run_collection_metadata_id ON link_attempts_to_runs(run_collection_metadata_id);
     """)
-    
+
     # COMMENTS
     op.execute("""
         COMMENT ON TABLE collector_names IS 'Lookup table for different collectors';
@@ -276,7 +276,7 @@ def upgrade():
     op.execute("""
         COMMENT ON TABLE link_attempts_to_runs IS 'Link table between collection_attempts and run_collection_metadata';
     """)
-    
+
     # COLUMN COMMENTS
     op.execute("""
         COMMENT ON COLUMN collection_configs.is_collected IS 'Whether or not this configuration has beeen successfully collected (True = Collected)';
@@ -305,7 +305,7 @@ def downgrade():
     op.execute("DROP TABLE IF EXISTS collected_contents CASCADE;")
     op.execute("DROP TABLE IF EXISTS collection_attempts CASCADE;")
     op.execute("DROP TABLE IF EXISTS collection_configs CASCADE;")
-    
+
     op.execute("DROP TABLE IF EXISTS content_metadata_schemas CASCADE;")
     op.execute("DROP TABLE IF EXISTS run_statuses CASCADE;")
     op.execute("DROP TABLE IF EXISTS run_types CASCADE;")
