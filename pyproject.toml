@@ -1,0 +1,122 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "epochai"
+version = "0.1.0"
+description = "EpochAI - Political and Financial Data Analysis"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+
+]
+
+[tool.ruff]
+exclude = [
+    ".bzr",
+    ".direnv",
+    ".eggs",
+    ".git",
+    ".git-rewrite",
+    ".hg",
+    ".mypy_cache",
+    ".nox",
+    ".pants.d",
+    ".pytype",
+    ".ruff_cache",
+    ".svn",
+    ".tox",
+    ".venv",
+    "__pypackages__",
+    "_build",
+    "buck-out",
+    "build",
+    "dist",
+    "node_modules",
+    "venv",
+    "data/",
+    "notebooks/",
+    "epochai/common/database/migrations/versions/",
+]
+
+line-length = 88
+
+target-version = "py38"
+
+[tool.ruff.lint]
+select = [
+    # Pycodestyle
+    "E",
+    "W",
+    # Pyflakes
+    "F",
+    # pyupgrade
+    "UP",
+    # flake8-bugbear
+    "B",
+    # flake8-simplify
+    "SIM",
+    # isort
+    "I",
+    # flake8-comprehensions
+    "C4",
+    # flake8-pie
+    "PIE",
+    # flake8-print
+    "T20",
+    # flake8-return
+    "RET",
+    # flake8-self
+    "SLF",
+    # Ruff-specific rules
+    "RUF",
+]
+
+ignore = [
+    # Allow non-abstract empty methods in abstract base classes
+    "B027",
+    # Allow boolean positional values in function calls
+    "FBT003",
+    # Ignore checks for possible passwords
+    "S105", "S106", "S107",
+    # Ignore complexity
+    "C901",
+    # Allow print statements (remove if you want to enforce no prints)
+    "T201",
+]
+
+# Allow fix for all enabled rules (when `--fix`) is provided
+fixable = ["ALL"]
+unfixable = []
+
+# Allow unused variables when underscore-prefixed
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.ruff.format]
+quote-style = "single"
+indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+
+[tool.ruff.lint.isort]
+# Force imports to be sorted by module, independent of import type
+force-sort-within-sections = true
+# Group first-party imports separately
+known-first-party = ["epochai"]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests can use magic values, assertions, and relative imports
+"tests/**/*" = ["PLR2004", "S101", "TID252"]
+# Database migrations can have long lines and unusual patterns
+"epochai/common/database/migrations/**/*" = ["E501", "RUF012"]
+# Config files can use exec
+"epochai/common/database/migrations/env.py" = ["S102"]
+# Allow print in scripts
+"epochai/data_collection/*.py" = ["T201"]
+"app/*.py" = ["T201"]
+
+[tool.bandit]
+# Bandit security linter configuration
+exclude_dirs = ["tests", "epochai/common/database/migrations"]
+skips = ["B101", "B601"]
