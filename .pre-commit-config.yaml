@@ -19,7 +19,14 @@ repos:
       # Run the formatter
       - id: ruff-format
 
-  # Optional: Add security checks
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.7.1
+    hooks:
+      - id: mypy
+        additional_dependencies: [types-requests, types-PyYAML]
+        args: [--ignore-missing-imports, --no-strict-optional]
+        exclude: ^(tests/|epochai/common/database/migrations/)
+
   - repo: https://github.com/PyCQA/bandit
     rev: 1.7.5
     hooks:
