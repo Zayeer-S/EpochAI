@@ -4,11 +4,17 @@ This document expplains the file structure of the project
 EpochAI/
 ├── .env                                                # Hide API keys and any other confidential information
 ├── .gitignore                                          # Files to exclude from version control
+├── .pre-commit-config.yaml                             # pre-commit's config
 ├── config.yml                                          # Configuration settings
 ├── constraints.yml                                     # Constraint configuration settings
+├── pyproject.toml
 ├── README.md                                           # Project overview and documentation
 ├── requirements.txt                                    # Python dependencies
 ├── setup.py                                            # Package installation setup
+│
+├── .github/
+│   └── workflows/
+│       └── lint.yml                                    # Automated lint via github actions
 │
 ├── app/                                                # Web application
 │   ├── __init__.py
