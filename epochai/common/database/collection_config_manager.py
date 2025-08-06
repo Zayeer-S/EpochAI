@@ -39,7 +39,7 @@ class CollectionConfigManager:
     @classmethod
     def get_collection_configs_from_database(
         cls,
-        collector_name: str = _collector_name,
+        collector_name: Optional[str] = None,
         collection_type: Optional[str] = None,
         language_code: Optional[str] = None,
         is_collected: Optional[bool] = None,
@@ -47,6 +47,9 @@ class CollectionConfigManager:
         """Gets collection configurations from database"""
 
         cls._lazy_database_init()
+
+        if collector_name is None:
+            collector_name = cls._collector_name
 
         if collector_name is None:
             cls._logger.error("Error, cls._collector_name is null")
@@ -73,14 +76,17 @@ class CollectionConfigManager:
             # Get all configs and filter so that we only have uncollected
             else:
                 all_configs = cls._collection_configs_dao.get_all()
-                collection_configs = all_configs
-
-                if is_collected is not None:
-                    collection_configs = [c for c in collection_configs if c.is_collected == is_collected]
+                if all_configs is None:
+                    collection_configs = []
                 else:
-                    collection_configs = [c for c in collection_configs if not c.is_collected]
+                    collection_configs = all_configs
 
-            grouped_configs = {}
+                    if is_collected is not None:
+                        collection_configs = [c for c in collection_configs if c.is_collected == is_collected]
+                    else:
+                        collection_configs = [c for c in collection_configs if not c.is_collected]
+
+            grouped_configs: Dict[str, Any] = {}
 
             for each_config in collection_configs:
                 collection_type_obj = cls._collection_types_dao.get_by_id(each_config.collection_type_id)

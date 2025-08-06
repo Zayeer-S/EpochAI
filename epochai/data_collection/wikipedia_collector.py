@@ -129,7 +129,7 @@ class WikipediaPoliticalCollector:
         if not self.current_batch:
             return
 
-        items_by_config_id = {}
+        items_by_config_id: Dict[int, List[Dict[str, Any]]] = {}
         for item_data, collection_config_id in self.current_batch:
             if collection_config_id not in items_by_config_id:
                 items_by_config_id[collection_config_id] = []
