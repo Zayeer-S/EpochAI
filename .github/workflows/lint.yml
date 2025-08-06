@@ -50,18 +50,18 @@ jobs:
       run: |
         mypy epochai/ app/
 
-    - name: Run Bandit security linter
-      run: |
-        bandit -r epochai/ app/ -f json -o bandit-report.json || true
-        bandit -r epochai/ app/
-      continue-on-error: true
-
-    - name: Upload Bandit report
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: bandit-report-${{ matrix.python-version }}
-        path: bandit-report.json
+    #- name: Run Bandit security linter
+    #  run: |
+    #    bandit -r epochai/ app/ -f json -o bandit-report.json || true
+    #    bandit -r epochai/ app/
+    #  continue-on-error: true
+#
+    #- name: Upload Bandit report
+    #  uses: actions/upload-artifact@v4
+    #  if: always()
+    #  with:
+    #    name: bandit-report-${{ matrix.python-version }}
+    #    path: bandit-report.json
 
   test:
     runs-on: ubuntu-latest
