@@ -1,7 +1,7 @@
 from contextlib import contextmanager
 import os
 import threading
-from typing import Any, Dict, List, Optional
+from typing import Any, cast, Dict, List, Optional
 
 from dotenv import load_dotenv
 import psycopg2
@@ -46,7 +46,7 @@ class DatabaseConnection:
         """Establish connection to the database"""
         try:
             self._connection = psycopg2.connect(
-                **self._connection_parameters,
+                **cast(dict, self._connection_parameters),
                 cursor_factory=RealDictCursor,
             )
             self._connection.autocommit = False
