@@ -122,7 +122,10 @@ class DatabaseConnection:
     ) -> List[Dict[str, Any]]:
         """Executes SELECT query and returns its results"""
         with self.get_cursor() as cursor:
-            results: List[Dict[str, Any]] = cursor.execute(query, params)
+            cursor.execute(query, params)
+
+            results: List[Dict[str, Any]] = cursor.fetchall()
+
             return results
 
     def execute_insert_query(

@@ -90,6 +90,13 @@ class CollectionConfigsDAO:
 
         try:
             results = self.db.execute_select_query(query)
+
+            if results is None:
+                self.logger.warning(
+                    "Database query return None in get_all() - table might be empty/not exist",
+                )
+                return []
+
             return [CollectionConfigs.from_dict(row) for row in results]
 
         except Exception as general_error:
