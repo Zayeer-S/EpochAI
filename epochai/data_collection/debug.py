@@ -152,7 +152,7 @@ print("=" * 50)
 print(f"Total pages tested: {len(test_pages)}")
 print(f"Successful retrievals: {success_count}")
 print(f"Failed retrievals: {failure_count}")
-print(f"Success rate: {(success_count/len(test_pages)*100):.1f}%")
+print(f"Success rate: {(success_count / len(test_pages) * 100):.1f}%")
 
 
 print("\n" + "=" * 30)

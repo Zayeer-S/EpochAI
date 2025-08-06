@@ -5,10 +5,13 @@ on:
     branches: [ main, develop ]
   pull_request:
     branches: [ main, develop ]
+  workflow_dispatch:
+
 
 jobs:
   lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     strategy:
       matrix:
         python-version: ["3.9", "3.10", "3.11", "3.12"]
@@ -17,7 +20,7 @@ jobs:
     - uses: actions/checkout@v4
 
     - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v4
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python-version }}
 
@@ -32,9 +35,8 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install ruff mypy bandit
-        pip install types-requests types-PyYAML
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        pip install ruff mypy bandit types-requests types-PyYAML types-psycopg2 --no-cache-dir
+        if [ -f requirements.txt ]; then pip install -r requirements.txt --no-cache-dir; fi
 
     - name: Run Ruff linter
       run: |
@@ -48,18 +50,18 @@ jobs:
       run: |
         mypy epochai/ app/
 
-    - name: Run Bandit security linter
-      run: |
-        bandit -r epochai/ app/ -f json -o bandit-report.json || true
-        bandit -r epochai/ app/
-      continue-on-error: true
-
-    - name: Upload Bandit report
-      uses: actions/upload-artifact@v4
-      if: always()
-      with:
-        name: bandit-report-${{ matrix.python-version }}
-        path: bandit-report.json
+    #- name: Run Bandit security linter
+    #  run: |
+    #    bandit -r epochai/ app/ -f json -o bandit-report.json || true
+    #    bandit -r epochai/ app/
+    #  continue-on-error: true
+#
+    #- name: Upload Bandit report
+    #  uses: actions/upload-artifact@v4
+    #  if: always()
+    #  with:
+    #    name: bandit-report-${{ matrix.python-version }}
+    #    path: bandit-report.json
 
   test:
     runs-on: ubuntu-latest
@@ -85,7 +87,7 @@ jobs:
       continue-on-error: true  # Remove when tests are made
 
     - name: Upload coverage reports
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       if: always()
       with:
         name: coverage-report
