@@ -94,7 +94,8 @@ class WikipediaUtils:
 
         search_max_results = self.config["api"]["search_max_results"]
 
-        self.switch_language(language_code)
+        if not self.switch_language(language_code):
+            return []  # no error log here as switch_language will log it itself
 
         self.logger.info(
             f"Searching for '{query}' in language '{language_code}' (max results: {search_max_results})",
