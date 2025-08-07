@@ -8,7 +8,7 @@ from epochai.common.utils.wikipedia_utils import WikipediaUtils
 
 @pytest.fixture
 def mock_config():
-    """Mock configuration that matches your WikipediaUtils needs"""
+    """Based off config.yml"""
     return {
         "api": {
             "rate_limit_delay": 0.1,
