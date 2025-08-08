@@ -14,9 +14,9 @@ class DebugWikipediaResultsDAO:
 
     def create_debug_result(
         self,
-        collection_config_id: int,
+        collection_target_id: int,
         search_term_used: str,
-        language_code_used: str,
+        language_code: str,
         test_status: str,
         search_results_found: List[str],
         error_message: str = "",
@@ -26,7 +26,7 @@ class DebugWikipediaResultsDAO:
 
         query = """
             INSERT INTO debug_wikipedia_results
-            (collection_config_id, search_term_used, language_code_used, test_status,
+            (collection_target_id, search_term_used, language_code, test_status,
              search_results_found, error_message, test_duration, created_at)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
@@ -37,9 +37,9 @@ class DebugWikipediaResultsDAO:
             search_results_json = json.dumps(search_results_found)
 
             params = (
-                collection_config_id,
+                collection_target_id,
                 search_term_used,
-                language_code_used,
+                language_code,
                 test_status,
                 search_results_json,
                 error_message,
@@ -51,7 +51,7 @@ class DebugWikipediaResultsDAO:
 
             if result:
                 self.logger.info(
-                    f"Created debug result for '{search_term_used}' ({language_code_used}): {test_status}",
+                    f"Created debug result for '{search_term_used}' ({language_code}): {test_status}",
                 )
                 return result
             self.logger.error(f"Failed to create debug result for '{search_term_used}'")
@@ -90,23 +90,23 @@ class DebugWikipediaResultsDAO:
         """Gets all successful debug tests"""
         return self.get_by_test_status("success")
 
-    def get_by_config_id(
+    def get_by_target_id(
         self,
-        collection_config_id: int,
+        collection_target_id: int,
     ) -> List[DebugWikipediaResults]:
-        """Gets all debug results for a specific config"""
+        """Gets all debug results for a specific target"""
 
         query = """
-            SELECT * FROM debug_wikipedia_results WHERE collection_config_id = %s ORDER BY created_at DESC
+            SELECT * FROM debug_wikipedia_results WHERE collection_target_id = %s ORDER BY created_at DESC
         """
 
         try:
-            results = self.db.execute_select_query(query, (collection_config_id,))
+            results = self.db.execute_select_query(query, (collection_target_id,))
             return [DebugWikipediaResults.from_dict(row) for row in results]
 
         except Exception as general_error:
             self.logger.error(
-                f"Error getting debug results for config {collection_config_id}: {general_error}",
+                f"Error getting debug results for target {collection_target_id}: {general_error}",
             )
             return []
 
@@ -127,12 +127,12 @@ class DebugWikipediaResultsDAO:
 
         language_stats_query = """
             SELECT
-                language_code_used,
+                language_code,
                 COUNT(*) as test_count,
                 COUNT(CASE WHEN test_status = 'success' THEN 1 END) as success_count,
                 COUNT(CASE WHEN test_status = 'failed' THEN 1 END) as failed_count
             FROM debug_wikipedia_results
-            GROUP BY language_code_used
+            GROUP BY language_code
             ORDER BY test_count DESC
         """
 
