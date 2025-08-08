@@ -133,7 +133,7 @@ class CollectionAttempts:
 
     id: Optional[int] = None
     collection_target_id: int = 0
-    language_code_used: str = ""
+    language_code: str = ""
     search_term_used: str = ""
     attempt_status_id: int = 0
     error_type_id: int = 0
@@ -149,7 +149,7 @@ class CollectionAttempts:
         return cls(
             id=data.get("id"),
             collection_target_id=data.get("collection_target_id"),
-            language_code_used=data.get("language_code_used"),
+            language_code=data.get("language_code"),
             search_term_used=data.get("search_term_used"),
             attempt_status_id=data.get("attempt_status_id"),
             error_type_id=data.get("error_type_id"),
@@ -260,7 +260,7 @@ class RawData:
             title=data.get("title"),
             language_code=data.get("language_code"),
             url=data.get("url"),
-            metadata=metadata,  # CHANGE HERE: Add metadata field
+            metadata=metadata,
             validation_status_id=data.get("validation_status_id"),
             validation_error=validation_error,
             filepath_of_save=data.get("filepath_of_save"),
@@ -474,7 +474,7 @@ class DebugWikipediaResults:
     id: Optional[int] = None
     collection_target_id: int = 0
     search_term_used: str = ""
-    language_code_used: str = ""
+    language_code: str = ""
     test_status: str = ""
     search_results_found: List[str] = None
     error_message: str = ""
@@ -502,8 +502,7 @@ class DebugWikipediaResults:
             id=data.get("id"),
             collection_target_id=data.get("collection_target_id"),
             search_term_used=data.get("search_term_used"),
-            # CHANGE HERE: Fix field mapping from language_code to language_code_used
-            language_code_used=data.get("language_code_used"),
+            language_code=data.get("language_code"),
             test_status=data.get("test_status"),
             search_results_found=search_results_found,
             error_message=data.get("error_message"),
