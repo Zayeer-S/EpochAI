@@ -7,7 +7,7 @@ from epochai.common.database.database import get_database
 from epochai.common.logging_config import get_logger
 
 
-class CollectionConfigManager:
+class CollectionTargetManager:
     _db_connection = None
     _collection_targets_dao = None
     _collector_names_dao = None
@@ -24,7 +24,7 @@ class CollectionConfigManager:
                 cls._collection_targets_dao = CollectionTargetsDAO()
                 cls._collector_names_dao = CollectorNamesDAO()
                 cls._collection_types_dao = CollectionTypesDAO()
-                cls._logger.info("Database components initialized for CollectionTargetsManager")
+                cls._logger.info("Database components initialized for CollectionTargetManager")
             except Exception as general_error:
                 cls._logger.error(f"Failed to initialize the database components: {general_error}")
                 raise
@@ -37,14 +37,14 @@ class CollectionConfigManager:
         cls._collector_name = collector_name
 
     @classmethod
-    def get_collection_configs_from_database(
+    def get_collection_targets_from_database(
         cls,
         collector_name: Optional[str] = None,
         collection_type: Optional[str] = None,
         language_code: Optional[str] = None,
         is_collected: Optional[bool] = None,
     ) -> Dict[str, Any]:
-        """Gets collection configurations from database"""
+        """Gets collection targets from database"""
 
         cls._lazy_database_init()
 
@@ -58,85 +58,85 @@ class CollectionConfigManager:
         try:
             # Directly get uncollected if we have collection_type and language_code
             if collection_type and language_code:
-                collection_configs = cls._collection_targets_dao.get_uncollected_by_type_and_language(
+                collection_targets = cls._collection_targets_dao.get_uncollected_by_type_and_language(
                     collection_type,
                     language_code,
                 )
 
             elif collection_type:
                 if is_collected is not None:
-                    all_configs = cls._collection_targets_dao.get_by_collector_and_type(
+                    all_targets = cls._collection_targets_dao.get_by_collector_and_type(
                         collector_name,
                         collection_type,
                     )
-                    collection_configs = [c for c in all_configs if c.is_collected == is_collected]
+                    collection_targets = [t for t in all_targets if t.is_collected == is_collected]
                 else:
-                    collection_configs = cls._collection_targets_dao.get_uncollected_by_type(collection_type)
+                    collection_targets = cls._collection_targets_dao.get_uncollected_by_type(collection_type)
 
-            # Get all configs and filter so that we only have uncollected
+            # Get all targets and filter so that we only have uncollected
             else:
-                all_configs = cls._collection_targets_dao.get_all()
-                if all_configs is None:
-                    collection_configs = []
+                all_targets = cls._collection_targets_dao.get_all()
+                if all_targets is None:
+                    collection_targets = []
                 else:
-                    collection_configs = all_configs
+                    collection_targets = all_targets
 
                     if is_collected is not None:
-                        collection_configs = [c for c in collection_configs if c.is_collected == is_collected]
+                        collection_targets = [t for t in collection_targets if t.is_collected == is_collected]
                     else:
-                        collection_configs = [c for c in collection_configs if not c.is_collected]
+                        collection_targets = [t for t in collection_targets if not t.is_collected]
 
-            grouped_configs: Dict[str, Any] = {}
+            grouped_targets: Dict[str, Any] = {}
 
-            for each_config in collection_configs:
-                collection_type_obj = cls._collection_types_dao.get_by_id(each_config.collection_type_id)
+            for each_target in collection_targets:
+                collection_type_obj = cls._collection_types_dao.get_by_id(each_target.collection_type_id)
                 type_name = collection_type_obj.collection_type if collection_type_obj else "unknown"
 
-                if type_name not in grouped_configs:
-                    grouped_configs[type_name] = {}
+                if type_name not in grouped_targets:
+                    grouped_targets[type_name] = {}
 
-                if each_config.language_code not in grouped_configs[type_name]:
-                    grouped_configs[type_name][each_config.language_code] = []
+                if each_target.language_code not in grouped_targets[type_name]:
+                    grouped_targets[type_name][each_target.language_code] = []
 
-                grouped_configs[type_name][each_config.language_code].append(each_config.collection_name)
+                grouped_targets[type_name][each_target.language_code].append(each_target.collection_name)
 
-            cls._logger.info(f"Retrieved {len(collection_configs)} collection configs from database")
-            return grouped_configs
+            cls._logger.info(f"Retrieved {len(collection_targets)} collection targets from database")
+            return grouped_targets
 
         except Exception as general_error:
-            cls._logger.error(f"Error retrieving collection configs from database: {general_error}")
+            cls._logger.error(f"Error retrieving collection targets from database: {general_error}")
             return {}
 
     @classmethod
-    def get_uncollected_configs_by_type(
+    def get_uncollected_targets_by_type(
         cls,
         collection_type: str,
     ) -> Dict[str, List[Dict[str, Any]]]:
-        """Gets uncollected configs of a specific type  for a specific collector, grouped by language"""
+        """Gets uncollected targets of a specific type for a specific collector, grouped by language"""
 
         cls._lazy_database_init()
 
         try:
-            collection_configs = cls._collection_targets_dao.get_uncollected_grouped_by_language(
+            collection_targets = cls._collection_targets_dao.get_uncollected_grouped_by_language(
                 collection_type,
             )
 
             result = {}
-            for language_code, config_list in collection_configs.items():
+            for language_code, target_list in collection_targets.items():
                 result[language_code] = [
                     {
-                        "id": each_config.id,
-                        "name": each_config.collection_name,
-                        "is_collected": each_config.is_collected,
+                        "id": each_target.id,
+                        "name": each_target.collection_name,
+                        "is_collected": each_target.is_collected,
                     }
-                    for each_config in config_list
+                    for each_target in target_list
                 ]
 
-            cls._logger.info(f"Retrieved uncollected {collection_type} configs for {len(result)} languages")
+            cls._logger.info(f"Retrieved uncollected {collection_type} targets for {len(result)} languages")
             return result
 
         except Exception as general_error:
-            cls._logger.error(f"Error retrieving uncollected {collection_type} configs: {general_error}")
+            cls._logger.error(f"Error retrieving uncollected {collection_type} targets: {general_error}")
             return {}
 
     @classmethod
@@ -155,85 +155,85 @@ class CollectionConfigManager:
             return {"by_type_and_language": [], "summary": {}}
 
     @classmethod
-    def mark_config_as_collected(
+    def mark_target_as_collected(
         cls,
-        config_id: int,
+        target_id: int,
     ) -> bool:
-        """Marks a collection config as collected"""
+        """Marks a collection target as collected"""
 
         cls._lazy_database_init()
 
         try:
-            success = cls._collection_targets_dao.mark_as_collected(config_id)
+            success = cls._collection_targets_dao.mark_as_collected(target_id)
             if success:
-                cls._logger.info(f"Marked config {config_id} as collected")
+                cls._logger.info(f"Marked target {target_id} as collected")
             return success
 
         except Exception as general_error:
-            cls._logger.error(f"Error marking config {config_id} as collected: {general_error}")
+            cls._logger.error(f"Error marking target {target_id} as collected: {general_error}")
             return False
 
     @classmethod
-    def mark_config_as_uncollected(
+    def mark_target_as_uncollected(
         cls,
-        config_id: int,
+        target_id: int,
     ) -> bool:
-        """Marks a collection config as uncollected"""
+        """Marks a collection target as uncollected"""
 
         cls._lazy_database_init()
 
         try:
-            success = cls._collection_targets_dao.mark_as_uncollected(config_id)
+            success = cls._collection_targets_dao.mark_as_uncollected(target_id)
             if success:
-                cls._logger.info(f"Marked config {config_id} as uncollected")
+                cls._logger.info(f"Marked target {target_id} as uncollected")
             return success
 
         except Exception as general_error:
-            cls._logger.error(f"Error marking config {config_id} as uncollected: {general_error}")
+            cls._logger.error(f"Error marking target {target_id} as uncollected: {general_error}")
             return False
 
     @classmethod
-    def search_collection_configs(
+    def search_collection_targets(
         cls,
         search_term: str,
     ) -> List[Dict[str, Any]]:
-        """Search collection configs by their names"""
+        """Search collection targets by their names"""
 
         cls._lazy_database_init()
 
         try:
-            collection_configs = cls._collection_targets_dao.search_by_name(search_term)
+            collection_targets = cls._collection_targets_dao.search_by_name(search_term)
 
             result = []
-            for each_config in collection_configs:
-                collection_type_obj = cls._collection_types_dao.get_by_id(each_config.collection_type_id)
+            for each_target in collection_targets:
+                collection_type_obj = cls._collection_types_dao.get_by_id(each_target.collection_type_id)
                 type_name = collection_type_obj.collection_type if collection_type_obj else "unknown"
 
                 result.append(
                     {
-                        "id": each_config.id,
-                        "name": each_config.collection_name,
+                        "id": each_target.id,
+                        "name": each_target.collection_name,
                         "type": type_name,
-                        "language_code": each_config.language_code,
-                        "is_collected": each_config.is_collected,
-                        "created_at": each_config.created_at,
+                        "language_code": each_target.language_code,
+                        "is_collected": each_target.is_collected,
+                        "created_at": each_target.created_at,
                     },
                 )
 
-            cls._logger.info(f"Found {len(result)} configs matching search term '{search_term}'")
+            cls._logger.info(f"Found {len(result)} targets matching search term '{search_term}'")
             return result
 
         except Exception as general_error:
-            cls._logger.error(f"Error searching collection configs for '{search_term}': {general_error}")
+            cls._logger.error(f"Error searching collection targets for '{search_term}': {general_error}")
             return []
 
     @classmethod
-    def get_combined_wikipedia_config(
+    def get_combined_wikipedia_target_config(
         cls,
         collector_name: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
-        Gets combined wikipedia config from database and config.yml
+        Gets combined wikipedia targets and config from database and config.yml
 
         Note:
             Falls back to YAML only config if combining fails
@@ -249,21 +249,21 @@ class CollectionConfigManager:
 
             yaml_config = ConfigLoader.get_wikipedia_yaml_config()
 
-            db_configs = cls.get_collection_configs_from_database(collector_name=collector_name)
+            db_targets = cls.get_collection_targets_from_database(collector_name=collector_name)
 
             combined_config = yaml_config.copy()
 
-            if "politicians" in db_configs:
-                combined_config["politicians"] = db_configs["politicians"]
+            if "politicians" in db_targets:
+                combined_config["politicians"] = db_targets["politicians"]
 
-            if "political_topics" in db_configs:
-                combined_config["political_topics"] = db_configs["political_topics"]
+            if "political_topics" in db_targets:
+                combined_config["political_topics"] = db_targets["political_topics"]
 
-            if "important_persons" in db_configs:
-                combined_config["important_persons"] = db_configs["important_persons"]
+            if "important_persons" in db_targets:
+                combined_config["important_persons"] = db_targets["important_persons"]
 
             combined_config["_database_info"] = {
-                "total_types": len(db_configs),
+                "total_types": len(db_targets),
                 "last_updated": "from_database",
             }
 
@@ -274,7 +274,7 @@ class CollectionConfigManager:
         except Exception as general_error:
             if cls._logger:
                 cls._logger.error(
-                    f"Error getting combined Wikipedia config: {general_error} - falling back to YAML only",
+                    f"Error getting combined Wikipedia target: {general_error} - falling back to YAML only",
                 )
             return ConfigLoader.get_wikipedia_yaml_config()
 
