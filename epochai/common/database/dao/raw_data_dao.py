@@ -19,6 +19,7 @@ class RawDataDAO:
         title: str,
         language_code: str,
         url: Optional[str] = None,
+        metadata: Optional[Dict[str, Any]] = None,
         validation_status_id: int = 0,
         validation_error: Optional[Dict[str, Any]] = None,
         filepath_of_save: Optional[str] = None,
@@ -33,14 +34,16 @@ class RawDataDAO:
         query = """
             INSERT INTO raw_data
             (collection_attempt_id, raw_data_metadata_schema_id , title, language_code,
-             url, validation_status_id, validation_error, filepath_of_save, created_at)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+             url, metadata, validation_status_id, validation_error, filepath_of_save, created_at)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """
 
         try:
             current_timestamp = datetime.now()
             validation_error_json = json.dumps(validation_error) if validation_error else None
+            # CHANGE HERE: Convert metadata to JSON string
+            metadata_json = json.dumps(metadata) if metadata else None
 
             params = (
                 collection_attempt_id,
@@ -48,6 +51,7 @@ class RawDataDAO:
                 title,
                 language_code,
                 url,
+                metadata_json,  # CHANGE HERE: Add metadata parameter
                 validation_status_id,
                 validation_error_json,
                 filepath_of_save,
@@ -200,6 +204,35 @@ class RawDataDAO:
             )
             return False
 
+    def update_metadata(
+        self,
+        raw_data_id: int,
+        metadata: Dict[str, Any],
+    ) -> bool:
+        """Update metadata for a raw data row"""
+
+        query = """
+            UPDATE raw_data
+            SET metadata = %s
+            WHERE id = %s
+        """
+
+        try:
+            metadata_json = json.dumps(metadata)
+            params = (metadata_json, raw_data_id)
+
+            affected_rows = self.db.execute_update_delete_query(query, params)
+
+            if affected_rows > 0:
+                self.logger.info(f"Updated metadata for raw data row {raw_data_id}")
+                return True
+            self.logger.warning(f"No raw data row found with id {raw_data_id} to update")
+            return False
+
+        except Exception as general_error:
+            self.logger.error(f"Error updating metadata for raw data row {raw_data_id}: {general_error}")
+            return False
+
     def search_by_title(
         self,
         search_term: str,
@@ -217,6 +250,41 @@ class RawDataDAO:
 
         except Exception as general_error:
             self.logger.error(f"Error searching raw data by title '{search_term}': {general_error}")
+            return []
+
+    def search_by_metadata_content(
+        self,
+        search_term: str,
+        metadata_field: Optional[str] = None,
+    ) -> List[RawData]:
+        """Search raw data by content within metadata JSON"""
+
+        if metadata_field:
+            query = """
+                SELECT * FROM raw_data
+                WHERE metadata ->> %s ILIKE %s
+                ORDER BY created_at DESC
+            """
+            params = (metadata_field, f"%{search_term}%")
+        else:
+            query = """
+                SELECT * FROM raw_data
+                WHERE metadata::text ILIKE %s
+                ORDER BY created_at DESC
+            """
+            params = (f"%{search_term}%",)  # type: ignore
+
+        try:
+            if metadata_field:
+                results = self.db.execute_select_query(query, params)
+            else:
+                results = self.db.execute_select_query(query, params)
+            return [RawData.from_dict(row) for row in results]
+
+        except Exception as general_error:
+            self.logger.error(
+                f"Error searching raw data by metadata content '{search_term}': {general_error}",
+            )
             return []
 
     def get_rows_with_details(
@@ -451,4 +519,49 @@ class RawDataDAO:
 
         except Exception as general_error:
             self.logger.error(f"Error getting raw data by filepath '{filepath}': {general_error}")
+            return []
+
+    def get_by_schema_id(
+        self,
+        schema_id: int,
+    ) -> List[RawData]:
+        """Gets all raw data using a specific metadata schema"""
+
+        query = """
+            SELECT * FROM raw_data
+            WHERE raw_data_metadata_schema_id = %s
+            ORDER BY created_at DESC
+        """
+
+        try:
+            results = self.db.execute_select_query(query, (schema_id,))
+            return [RawData.from_dict(row) for row in results]
+
+        except Exception as general_error:
+            self.logger.error(f"Error getting raw data by schema id {schema_id}: {general_error}")
+            return []
+
+    def get_metadata_field_values(
+        self,
+        field_name: str,
+        limit: Optional[int] = None,
+    ) -> List[Any]:
+        """Extract specific field values from metadata JSON across all records"""
+
+        query = """
+            SELECT metadata ->> %s as field_value
+            FROM raw_data
+            WHERE metadata ->> %s IS NOT NULL
+            ORDER BY created_at DESC
+        """
+
+        if limit:
+            query += f" LIMIT {limit}"
+
+        try:
+            results = self.db.execute_select_query(query, (field_name, field_name))
+            return [row["field_value"] for row in results if row["field_value"] is not None]
+
+        except Exception as general_error:
+            self.logger.error(f"Error extracting metadata field '{field_name}': {general_error}")
             return []
