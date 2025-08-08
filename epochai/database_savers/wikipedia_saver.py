@@ -1,9 +1,9 @@
 from typing import Any, Dict, List, Optional
 
 from epochai.common.config.config_loader import ConfigLoader
-from epochai.common.database.dao.collected_contents_dao import CollectedContentsDAO
 from epochai.common.database.dao.collection_attempts_dao import CollectionAttemptsDAO
-from epochai.common.database.dao.collection_configs_dao import CollectionConfigsDAO
+from epochai.common.database.dao.collection_targets_dao import CollectionTargetsDAO
+from epochai.common.database.dao.raw_data_dao import RawDataDAO
 from epochai.common.logging_config import get_logger
 from epochai.common.utils.data_utils import DataUtils
 
@@ -21,10 +21,9 @@ class WikipediaSaver:
             )
             if self.save_to_database:
                 self.collection_attempts_dao = CollectionAttemptsDAO()
-                self.collected_contents_dao = CollectedContentsDAO()
-                self.collection_configs_dao = CollectionConfigsDAO()
+                self.raw_data_dao = RawDataDAO()
+                self.collection_targets_dao = CollectionTargetsDAO()
 
-                self.CONTENT_TYPE_ID = 1
                 self.ATTEMPT_STATUS_ID = 1
                 self.VALIDATION_STATUS_ID = 1
                 self.METADATA_SCHEMA_ID = 1
@@ -51,11 +50,11 @@ class WikipediaSaver:
     def save_incrementally_to_database(
         self,
         collected_data: List[Dict[str, Any]],
-        collection_config_id: int,
+        collection_target_id: int,
         language_code: str,
     ) -> Optional[int]:
         self.logger.info(
-            f"Saving {len(collected_data)} Wikipedia articles to database for config {collection_config_id}...",  # noqa
+            f"Saving {len(collected_data)} Wikipedia articles to database for target {collection_target_id}...",  # noqa
         )
 
         success_count = 0
@@ -71,8 +70,8 @@ class WikipediaSaver:
 
             try:
                 attempt_id = self.collection_attempts_dao.create_attempt(
-                    collection_config_id=collection_config_id,
-                    language_code_used=language_code,
+                    collection_target_id=collection_target_id,
+                    language_code=language_code,
                     search_term_used=title,
                     attempt_status_id=self.ATTEMPT_STATUS_ID,
                     error_type_id=None,
@@ -84,13 +83,25 @@ class WikipediaSaver:
                         f"Failed to create attempt for '{title}' - Not saving metadata for this",
                     )
                     continue
-                content_id = self.collected_contents_dao.create_content(
+
+                metadata = {  # need to get this from the db
+                    "page_id": item.get("page_id"),
+                    "language": language_code,
+                    "title": title,
+                    "content": content,
+                    "categories": item.get("categories", []),
+                    "links": item.get("links", []),
+                    "word_count": len(content.split()) if content else 0,
+                    "last_modified": item.get("last_modified"),
+                }
+
+                content_id = self.raw_data_dao.create_raw_data(
                     collection_attempt_id=attempt_id,
-                    content_type_id=self.CONTENT_TYPE_ID,
-                    content_metadata_schema_id=self.METADATA_SCHEMA_ID,
+                    raw_data_metadata_schema_id=self.METADATA_SCHEMA_ID,
                     title=title,
-                    main_content=content,
+                    language_code=language_code,
                     url=url,
+                    metadata=metadata,
                     validation_status_id=self.VALIDATION_STATUS_ID,
                     validation_error=None,
                     filepath_of_save="",
@@ -100,19 +111,19 @@ class WikipediaSaver:
                     self.logger.error(f"Failed to insert content for '{title}'")
                 else:
                     success_count += 1
-                    self.logger.info(f"Successfully saved '{title}' to database")
+                    self.logger.info(f"Successfully saved '{title}' to database with metadata")
 
             except Exception as general_error:
                 self.logger.error(f"Database error while saving '{title}': {general_error}")
 
         if success_count > 0:
-            mark_as_collected = self.collection_configs_dao.mark_as_collected(collection_config_id)
+            mark_as_collected = self.collection_targets_dao.mark_as_collected(collection_target_id)
             if mark_as_collected:
                 self.logger.info(
-                    f"Marked config {collection_config_id} as collected after saving {success_count} items",
+                    f"Marked target {collection_target_id} as collected after saving {success_count} items",
                 )
             else:
-                self.logger.error(f"Failed to mark config {collection_config_id} as collected")
+                self.logger.error(f"Failed to mark target {collection_target_id} as collected")
 
             self.logger.info(
                 f"Successfully saved {success_count} of {len(collected_data)} Wikipedia articles to the database",  # noqa
@@ -127,27 +138,27 @@ class WikipediaSaver:
     ) -> None:
         self.data_utils.log_data_summary(collected_data)
 
-    def get_collection_config_id(
+    def get_collection_target_id(
         self,
         collection_type: str,
         language_code: str,
         collection_name: str,
     ) -> Optional[int]:
-        """Gets the collection_config_id for the current collection"""
+        """Gets the collection_target_id for the current collection"""
         try:
-            configs = self.collection_configs_dao.get_uncollected_by_type_and_language(
+            targets = self.collection_targets_dao.get_uncollected_by_type_and_language(
                 collection_type,
                 language_code,
             )
 
-            for config in configs:
-                if config.collection_name == collection_name:
-                    self.logger.debug(f"Found exact config match id {config.id} for name {collection_name}")
-                    return config.id
+            for target in targets:
+                if target.collection_name == collection_name:
+                    self.logger.debug(f"Found exact target match id {target.id} for name {collection_name}")
+                    return target.id
 
-            self.logger.warning(f"No existing config found for '{collection_name}'")
+            self.logger.warning(f"No existing target found for '{collection_name}'")
             return None
 
         except Exception as e:
-            self.logger.error(f"Error getting collection config id: {e}")
+            self.logger.error(f"Error getting collection target id: {e}")
             return None
