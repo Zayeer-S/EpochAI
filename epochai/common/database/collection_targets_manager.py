@@ -1,6 +1,6 @@
 from typing import Any, Dict, List, Optional
 
-from epochai.common.database.dao.collection_configs_dao import CollectionConfigsDAO
+from epochai.common.database.dao.collection_targets_dao import CollectionTargetsDAO
 from epochai.common.database.dao.collection_types_dao import CollectionTypesDAO
 from epochai.common.database.dao.collector_names_dao import CollectorNamesDAO
 from epochai.common.database.database import get_database
@@ -9,7 +9,7 @@ from epochai.common.logging_config import get_logger
 
 class CollectionConfigManager:
     _db_connection = None
-    _collection_configs_dao = None
+    _collection_targets_dao = None
     _collector_names_dao = None
     _collection_types_dao = None
     _logger = None
@@ -21,10 +21,10 @@ class CollectionConfigManager:
             cls._logger = get_logger(__name__)
             try:
                 cls._db_connection = get_database()
-                cls._collection_configs_dao = CollectionConfigsDAO()
+                cls._collection_targets_dao = CollectionTargetsDAO()
                 cls._collector_names_dao = CollectorNamesDAO()
                 cls._collection_types_dao = CollectionTypesDAO()
-                cls._logger.info("Database components initialized for CollectionConfigManager")
+                cls._logger.info("Database components initialized for CollectionTargetsManager")
             except Exception as general_error:
                 cls._logger.error(f"Failed to initialize the database components: {general_error}")
                 raise
@@ -58,24 +58,24 @@ class CollectionConfigManager:
         try:
             # Directly get uncollected if we have collection_type and language_code
             if collection_type and language_code:
-                collection_configs = cls._collection_configs_dao.get_uncollected_by_type_and_language(
+                collection_configs = cls._collection_targets_dao.get_uncollected_by_type_and_language(
                     collection_type,
                     language_code,
                 )
 
             elif collection_type:
                 if is_collected is not None:
-                    all_configs = cls._collection_configs_dao.get_by_collector_and_type(
+                    all_configs = cls._collection_targets_dao.get_by_collector_and_type(
                         collector_name,
                         collection_type,
                     )
                     collection_configs = [c for c in all_configs if c.is_collected == is_collected]
                 else:
-                    collection_configs = cls._collection_configs_dao.get_uncollected_by_type(collection_type)
+                    collection_configs = cls._collection_targets_dao.get_uncollected_by_type(collection_type)
 
             # Get all configs and filter so that we only have uncollected
             else:
-                all_configs = cls._collection_configs_dao.get_all()
+                all_configs = cls._collection_targets_dao.get_all()
                 if all_configs is None:
                     collection_configs = []
                 else:
@@ -117,7 +117,7 @@ class CollectionConfigManager:
         cls._lazy_database_init()
 
         try:
-            collection_configs = cls._collection_configs_dao.get_uncollected_grouped_by_language(
+            collection_configs = cls._collection_targets_dao.get_uncollected_grouped_by_language(
                 collection_type,
             )
 
@@ -146,7 +146,7 @@ class CollectionConfigManager:
         cls._lazy_database_init()
 
         try:
-            status = cls._collection_configs_dao.get_collection_status()
+            status = cls._collection_targets_dao.get_collection_status()
             cls._logger.info("Retrieved collection status summary from database")
             return status
 
@@ -164,7 +164,7 @@ class CollectionConfigManager:
         cls._lazy_database_init()
 
         try:
-            success = cls._collection_configs_dao.mark_as_collected(config_id)
+            success = cls._collection_targets_dao.mark_as_collected(config_id)
             if success:
                 cls._logger.info(f"Marked config {config_id} as collected")
             return success
@@ -183,7 +183,7 @@ class CollectionConfigManager:
         cls._lazy_database_init()
 
         try:
-            success = cls._collection_configs_dao.mark_as_uncollected(config_id)
+            success = cls._collection_targets_dao.mark_as_uncollected(config_id)
             if success:
                 cls._logger.info(f"Marked config {config_id} as uncollected")
             return success
@@ -202,7 +202,7 @@ class CollectionConfigManager:
         cls._lazy_database_init()
 
         try:
-            collection_configs = cls._collection_configs_dao.search_by_name(search_term)
+            collection_configs = cls._collection_targets_dao.search_by_name(search_term)
 
             result = []
             for each_config in collection_configs:
