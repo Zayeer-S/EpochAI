@@ -264,7 +264,6 @@ class TestGetDataSummary:
         mock_df.__len__ = Mock(return_value=2)
         mock_df.columns = ["title", "content", "url"]
 
-        # CHANGE HERE: Use side_effect to properly handle column access
         mock_content_series = Mock()
         mock_str_accessor = Mock()
         mock_content_lengths = Mock()
