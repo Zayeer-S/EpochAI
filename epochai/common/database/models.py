@@ -51,8 +51,8 @@ class CollectionTypes:
 
 
 @dataclass
-class CollectionConfigs:
-    """collection_configs table model"""
+class CollectionTargets:
+    """collection_targets table model"""
 
     id: Optional[int] = None
     collector_name_id: int = 0
@@ -67,7 +67,7 @@ class CollectionConfigs:
     def from_dict(
         cls,
         data: Dict[str, Any],
-    ) -> "CollectionConfigs":
+    ) -> "CollectionTargets":
         """Creates instance from database row dictionary"""
         return cls(
             id=data.get("id"),
@@ -132,8 +132,8 @@ class CollectionAttempts:
     """collection_attempts table model"""
 
     id: Optional[int] = None
-    collection_config_id: int = 0
-    language_code_used: str = ""
+    collection_target_id: int = 0
+    language_code: str = ""
     search_term_used: str = ""
     attempt_status_id: int = 0
     error_type_id: int = 0
@@ -148,8 +148,8 @@ class CollectionAttempts:
         """Creates instance from database row dictionary"""
         return cls(
             id=data.get("id"),
-            collection_config_id=data.get("collection_config_id"),
-            language_code_used=data.get("language_code_used"),
+            collection_target_id=data.get("collection_target_id"),
+            language_code=data.get("language_code"),
             search_term_used=data.get("search_term_used"),
             attempt_status_id=data.get("attempt_status_id"),
             error_type_id=data.get("error_type_id"),
@@ -182,11 +182,11 @@ class ValidationStatuses:
 
 
 @dataclass
-class CollectedContentTypes:
-    """collected_content_types table model"""
+class RawDataMetadataSchemas:
+    """raw_data_metadata_schemas table model"""
 
     id: Optional[int] = None
-    collected_content_type_name: str = ""
+    metadata_schema: Dict[str, Any] = None
     updated_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
 
@@ -194,32 +194,9 @@ class CollectedContentTypes:
     def from_dict(
         cls,
         data: Dict[str, Any],
-    ) -> "CollectedContentTypes":
+    ) -> "RawDataMetadataSchemas":
         "Creates instance from database row dictionary"
-        return cls(
-            id=data.get("id"),
-            collected_content_type_name=data.get("collected_content_type_name"),
-            updated_at=data.get("updated_at"),
-            created_at=data.get("created_at"),
-        )
-
-
-@dataclass
-class ContentMetadataSchemas:
-    """content_metadata_schemas table model"""
-
-    id: Optional[int] = None
-    content_metadata_schema: Dict[str, Any] = None
-    updated_at: Optional[datetime] = None
-    created_at: Optional[datetime] = None
-
-    @classmethod
-    def from_dict(
-        cls,
-        data: Dict[str, Any],
-    ) -> "ContentMetadataSchemas":
-        "Creates instance from database row dictionary"
-        schema = data.get("content_metadata_schema")
+        schema = data.get("metadata_schema")
         if isinstance(schema, str):
             try:
                 schema = json.loads(schema)
@@ -228,23 +205,23 @@ class ContentMetadataSchemas:
 
         return cls(
             id=data.get("id"),
-            content_metadata_schema=schema,
+            metadata_schema=schema,
             updated_at=data.get("updated_at"),
             created_at=data.get("created_at"),
         )
 
 
 @dataclass
-class CollectedContents:
-    """collected_contents table model"""
+class RawData:
+    """raw_data table model"""
 
     id: Optional[int] = None
     collection_attempt_id: int = 0
-    content_type_id: int = 0
-    content_metadata_schema_id: int = 0
+    raw_data_metadata_schema_id: int = 0
     title: str = ""
-    main_content: str = ""
+    language_code: str = ""
     url: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
     validation_status_id: int = 0
     validation_error: Optional[Dict[str, Any]] = None
     filepath_of_save: str = ""
@@ -253,12 +230,14 @@ class CollectedContents:
     def __post_init__(self):
         if self.validation_error is None:
             self.validation_error = {}
+        if self.metadata is None:
+            self.metadata = {}
 
     @classmethod
     def from_dict(
         cls,
         data: Dict[str, Any],
-    ) -> "CollectedContents":
+    ) -> "RawData":
         """Creates instance from database raw dictionary"""
         validation_error = data.get("validation_error")
         if isinstance(validation_error, str):
@@ -267,14 +246,21 @@ class CollectedContents:
             except json.JSONDecodeError:
                 validation_error = {}
 
+        metadata = data.get("metadata")
+        if isinstance(metadata, str):
+            try:
+                metadata = json.loads(metadata)
+            except json.JSONDecodeError:
+                metadata = {}
+
         return cls(
             id=data.get("id"),
             collection_attempt_id=data.get("collection_attempt_id"),
-            content_type_id=data.get("content_type_id"),
-            content_metadata_schema_id=data.get("content_metadata_schema_id"),
+            raw_data_metadata_schema_id=data.get("raw_data_metadata_schema_id"),
             title=data.get("title"),
-            main_content=data.get("main_content"),
+            language_code=data.get("language_code"),
             url=data.get("url"),
+            metadata=metadata,
             validation_status_id=data.get("validation_status_id"),
             validation_error=validation_error,
             filepath_of_save=data.get("filepath_of_save"),
@@ -283,25 +269,95 @@ class CollectedContents:
 
 
 @dataclass
-class CollectedContentMetadata:
-    """collected_content_metadata table"""
+class CleanedData:
+    """cleaned_data table model"""
 
     id: Optional[int] = None
-    collected_content_id: int = 0
-    metadata_key: str = ""
-    metadata_value: str = ""
+    raw_data_id: int = 0
+    cleaned_data_metadata_schema_id: int = 0
+    title: str = ""
+    language_code: str = ""
+    url: Optional[str] = None
+    metadata: Optional[Dict[str, Any]] = None
+    validation_status_id: int = 0
+    validation_error: Optional[Dict[str, Any]] = None
+    cleaner_used: str = ""
+    cleaner_version: str = ""
+    cleaning_time_ms: int = 0
+    cleaned_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+
+    def __post_init__(self):
+        if self.validation_error is None:
+            self.validation_error = {}
+        if self.metadata is None:
+            self.metadata = {}
 
     @classmethod
     def from_dict(
         cls,
         data: Dict[str, Any],
-    ) -> "CollectedContentMetadata":
-        """Creates instance from database raw dictionary"""
+    ) -> "CleanedData":
+        """Creates instance from database row dictionary"""
+        validation_error = data.get("validation_error")
+        if isinstance(validation_error, str):
+            try:
+                validation_error = json.loads(validation_error)
+            except json.JSONDecodeError:
+                validation_error = {}
+
+        metadata = data.get("metadata")
+        if isinstance(metadata, str):
+            try:
+                metadata = json.loads(metadata)
+            except json.JSONDecodeError:
+                metadata = {}
+
         return cls(
             id=data.get("id"),
-            collected_content_id=data.get("collected_content_id"),
-            metadata_key=data.get("metadata_key"),
-            metadata_value=data.get("metadata_value"),
+            raw_data_id=data.get("raw_data_id"),
+            cleaned_data_metadata_schema_id=data.get("cleaned_data_metadata_schema_id"),
+            title=data.get("title"),
+            language_code=data.get("language_code"),
+            url=data.get("url"),
+            metadata=metadata,
+            validation_status_id=data.get("validation_status_id"),
+            validation_error=validation_error,
+            cleaner_used=data.get("cleaner_used"),
+            cleaner_version=data.get("cleaner_version"),
+            cleaning_time_ms=data.get("cleaning_time_ms"),
+            cleaned_at=data.get("cleaned_at"),
+            created_at=data.get("created_at"),
+        )
+
+
+@dataclass
+class CleanedDataMetadataSchemas:
+    """cleaned_data_metadata_schemas table model"""
+
+    id: Optional[int] = None
+    metadata_schema: Dict[str, Any] = None
+    updated_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+
+    @classmethod
+    def from_dict(
+        cls,
+        data: Dict[str, Any],
+    ) -> "CleanedDataMetadataSchemas":
+        """Creates instance from database row dictionary"""
+        schema = data.get("metadata_schema")
+        if isinstance(schema, str):
+            try:
+                schema = json.loads(schema)
+            except json.JSONDecodeError:
+                schema = {}
+
+        return cls(
+            id=data.get("id"),
+            metadata_schema=schema,
+            updated_at=data.get("updated_at"),
+            created_at=data.get("created_at"),
         )
 
 
@@ -416,9 +472,9 @@ class DebugWikipediaResults:
     """debug_wikipedia_results table model"""
 
     id: Optional[int] = None
-    collection_config_id: int = 0
+    collection_target_id: int = 0
     search_term_used: str = ""
-    language_code_used: str = ""
+    language_code: str = ""
     test_status: str = ""
     search_results_found: List[str] = None
     error_message: str = ""
@@ -444,9 +500,9 @@ class DebugWikipediaResults:
 
         return cls(
             id=data.get("id"),
-            collection_config_id=data.get("collection_config_id"),
+            collection_target_id=data.get("collection_target_id"),
             search_term_used=data.get("search_term_used"),
-            language_code_used=data.get("language_code_used"),
+            language_code=data.get("language_code"),
             test_status=data.get("test_status"),
             search_results_found=search_results_found,
             error_message=data.get("error_message"),

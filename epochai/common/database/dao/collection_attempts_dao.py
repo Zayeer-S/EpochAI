@@ -15,8 +15,8 @@ class CollectionAttemptsDAO:
 
     def create_attempt(
         self,
-        collection_config_id: int,
-        language_code_used: str,
+        collection_target_id: int,
+        language_code: str,
         search_term_used: str,
         attempt_status_id: int,
         error_type_id: Optional[int] = None,
@@ -31,7 +31,7 @@ class CollectionAttemptsDAO:
 
         query = """
             INSERT INTO collection_attempts
-            (collection_config_id, language_code_used, search_term_used, attempt_status_id, error_type_id, error_message, created_at)
+            (collection_target_id, language_code, search_term_used, attempt_status_id, error_type_id, error_message, created_at)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
             RETURNING id
         """  # noqa
@@ -39,8 +39,8 @@ class CollectionAttemptsDAO:
         try:
             current_timestamp = datetime.now()
             params = (
-                collection_config_id,
-                language_code_used,
+                collection_target_id,
+                language_code,
                 search_term_used,
                 attempt_status_id,
                 error_type_id,
@@ -51,17 +51,17 @@ class CollectionAttemptsDAO:
 
             if result:
                 self.logger.info(
-                    f"Created collection attempt for config '{collection_config_id}': {search_term_used} ({language_code_used})",  # noqa
+                    f"Created collection attempt for config '{collection_target_id}': {search_term_used} ({language_code})",  # noqa
                 )
                 return result
             self.logger.error(
-                f"Failed to create collection attempt for config '{collection_config_id}': {search_term_used} ({language_code_used})",  # noqa
+                f"Failed to create collection attempt for config '{collection_target_id}': {search_term_used} ({language_code})",  # noqa
             )
             return None
 
         except Exception as general_error:
             self.logger.error(
-                f"Error creatiing collection attempt for config '{collection_config_id}' (search term used: {search_term_used} ({language_code_used}): {general_error}",  # noqa
+                f"Error creatiing collection attempt for config '{collection_target_id}' (search term used: {search_term_used} ({language_code}): {general_error}",  # noqa
             )
             return None
 
@@ -100,22 +100,22 @@ class CollectionAttemptsDAO:
             self.logger.error(f"Error getting all collection attempts: {general_error}")
             return []
 
-    def get_by_config_id(
+    def get_by_target_id(
         self,
-        collection_config_id: int,
+        collection_target_id: int,
     ) -> List[CollectionAttempts]:
-        """Gets all attempts for a specific collection config"""
+        """Gets all attempts for a specific collection target"""
 
         query = """
-            SELECT * FROM collection_attempts WHERE collection_config_id = %s ORDER BY created_at DESC
+            SELECT * FROM collection_attempts WHERE collection_target_id = %s ORDER BY created_at DESC
         """
 
         try:
-            results = self.db.execute_select_query(query, (collection_config_id,))
+            results = self.db.execute_select_query(query, (collection_target_id,))
             return [CollectionAttempts.from_dict(row) for row in results]
 
         except Exception as general_error:
-            self.logger.error(f"Error getting attempts for config '{collection_config_id}': {general_error}")
+            self.logger.error(f"Error getting attempts for target '{collection_target_id}': {general_error}")
             return []
 
     def get_by_status(
@@ -153,26 +153,26 @@ class CollectionAttemptsDAO:
 
     def get_latest_attempt_for_config(
         self,
-        collection_config_id: int,
+        collection_target_id: int,
     ) -> Optional[CollectionAttempts]:
         """Gets the latest attempt for a specific config"""
 
         query = """
             SELECT * FROM collection_attempts
-            WHERE collection_config_id = %s
+            WHERE collection_target_id = %s
             ORDER BY created_at DESC
             LIMIT 1
         """
 
         try:
-            results = self.db.execute_select_query(query, (collection_config_id,))
+            results = self.db.execute_select_query(query, (collection_target_id,))
             if results:
                 return CollectionAttempts.from_dict(results[0])
             return None
 
         except Exception as general_error:
             self.logger.error(
-                f"Error getting latest attempt for config '{collection_config_id}': {general_error}",
+                f"Error getting latest attempt for config '{collection_target_id}': {general_error}",
             )
             return None
 
@@ -212,13 +212,13 @@ class CollectionAttemptsDAO:
                 ca.*,
                 ast.attempt_status_name,
                 et.error_type_name,
-                cc.collection_name,
+                cfg.collection_name,
                 ct.collection_type
             FROM collection_attempts ca
             LEFT JOIN attempt_statuses ast ON ca.attempt_status_id = ast.id
             LEFT JOIN error_types et ON ca.error_type_id = et.id
-            LEFT JOIN collection_configs cc ON ca.collection_config_id = cc.id
-            LEFT JOIN collection_types ct ON cc.collection_type_id = ct.id
+            LEFT JOIN collection_targets cfg ON ca.collection_target_id = cfg.id
+            LEFT JOIN collection_types ct ON cfg.collection_type_id = ct.id
             ORDER BY ca.created_at DESC
         """
 
@@ -235,30 +235,30 @@ class CollectionAttemptsDAO:
             return []
 
     def get_failed_configs_for_retry(self) -> List[Dict[str, Any]]:
-        """Gets collection configs that have only failed attempts and need retry"""
+        """Gets collection targets that have only failed attempts and need retry"""
 
         query = """
             SELECT DISTINCT
-                cc.id as config_id,
-                cc.collection_name,
-                cc.language_code,
-                ct.collection_type,
-                ca.error_message,
-                et.error_type_name,
-                ca.created_at as last_attempt_at
-            FROM collection_configs cc
-            JOIN collection_types ct ON cc.collection_type_id = ct.id
-            JOIN collection_attempts ca ON cc.id = ca.collection_config_id
-            JOIN error_types et ON ca.error_type_id = et.id
-            WHERE cc.is_collected = false
-            AND ca.id = (
-                SELECT MAX (ca2.id)
-                FROM collection_attempts ca2
-                WHERE ca2.collection_config_id = cc.id
-            )
-            AND ca.attempt_status_id = (
-                SELECT id FROM attempt_statuses WHERE attempt_status_name = 'failed'
-            )
+                    cfg.id as config_id,
+                    cfg.collection_name,
+                    cfg.language_code,
+                    ct.collection_type,
+                    ca.error_message,
+                    et.error_type_name,
+                    ca.created_at as last_attempt_at
+                FROM collection_targets cfg
+                JOIN collection_types ct ON cfg.collection_type_id = ct.id
+                JOIN collection_attempts ca ON cfg.id = ca.collection_target_id
+                JOIN error_types et ON ca.error_type_id = et.id
+                WHERE cfg.is_collected = false
+                AND ca.id = (
+                    SELECT MAX(ca2.id)
+                    FROM collection_attempts ca2
+                    WHERE ca2.collection_target_id = cfg.id
+                )
+                AND ca.attempt_status_id = (
+                    SELECT id FROM attempt_statuses WHERE attempt_status_name = 'failed'
+                )
         """
 
         try:
@@ -277,7 +277,7 @@ class CollectionAttemptsDAO:
             SELECT
                 ast.attempt_status_name,
                 COUNT(*) as attempt_count,
-                COUNT(DISTINCT ca.collection_config_id) as unique_configs
+                COUNT(DISTINCT ca.collection_target_id) as unique_configs
             FROM collection_attempts ca
             JOIN attempt_statuses ast ON ca.attempt_status_id = ast.id
             GROUP BY ast.attempt_status_name
@@ -328,26 +328,26 @@ class CollectionAttemptsDAO:
 
     def delete_attempts_for_config(
         self,
-        collection_config_id: int,
+        collection_target_id: int,
     ) -> int:
         """Deletes all attempts for a specific config"""
 
         query = """
-            DELETE FROM collection_attempts WHERE collection_config_id = %s
+            DELETE FROM collection_attempts WHERE collection_target_id = %s
         """
 
         try:
-            affected_rows = self.db.execute_update_delete_query(query, (collection_config_id,))
+            affected_rows = self.db.execute_update_delete_query(query, (collection_target_id,))
 
             if affected_rows > 0:
-                self.logger.info(f"Deleted {affected_rows} attempts for config {collection_config_id}")
+                self.logger.info(f"Deleted {affected_rows} attempts for config {collection_target_id}")
             else:
-                self.logger.warning(f"No attempts found for config {collection_config_id} to delete")
+                self.logger.warning(f"No attempts found for config {collection_target_id} to delete")
 
             return affected_rows
 
         except Exception as general_error:
-            self.logger.error(f"Error deleting attempts for config {collection_config_id}: {general_error}")
+            self.logger.error(f"Error deleting attempts for config {collection_target_id}: {general_error}")
             return 0
 
     def delete_old_attempts(
