@@ -54,15 +54,6 @@ def upgrade():
     """)
 
     op.execute("""
-        CREATE TABLE IF NOT EXISTS collected_content_types (
-            id SERIAL PRIMARY KEY,
-            collected_content_type_name TEXT NOT NULL UNIQUE,
-            updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-            created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-        );
-    """)
-
-    op.execute("""
         CREATE TABLE IF NOT EXISTS run_types (
             id SERIAL PRIMARY KEY,
             run_type_name TEXT NOT NULL UNIQUE,
@@ -81,17 +72,26 @@ def upgrade():
     """)
 
     op.execute("""
-        CREATE TABLE IF NOT EXISTS content_metadata_schemas (
+        CREATE TABLE IF NOT EXISTS raw_data_metadata_schemas (
             id SERIAL PRIMARY KEY,
-            content_metadata_schema JSONB NOT NULL,
+            metadata_schema JSONB NOT NULL,
             updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
             created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
         );
     """)
 
+    op.execute("""
+    CREATE TABLE IF NOT EXISTS cleaned_data_metadata_schemas (
+        id SERIAL PRIMARY KEY,
+        metadata_schema JSONB NOT NULL,
+        updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+    );
+    """)
+
     # MAIN TABLES
     op.execute("""
-        CREATE TABLE IF NOT EXISTS collection_configs(
+        CREATE TABLE IF NOT EXISTS collection_targets(
             id SERIAL PRIMARY KEY,
             collector_name_id INTEGER NOT NULL REFERENCES collector_names(id) ON DELETE RESTRICT,
             collection_type_id INTEGER NOT NULL REFERENCES collection_types(id) ON DELETE RESTRICT,
@@ -101,15 +101,15 @@ def upgrade():
             updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
             created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
 
-            CONSTRAINT ensure_collection_config_is_unique UNIQUE(collector_name_id, collection_type_id, language_code, collection_name)
+            CONSTRAINT ensure_collection_target_is_unique UNIQUE(collector_name_id, collection_type_id, language_code, collection_name)
         );
     """)
 
     op.execute("""
         CREATE TABLE IF NOT EXISTS collection_attempts(
             id SERIAL PRIMARY KEY,
-            collection_config_id INTEGER NOT NULL REFERENCES collection_configs(id) ON DELETE RESTRICT,
-            language_code_used TEXT NOT NULL,
+            collection_target_id INTEGER NOT NULL REFERENCES collection_targets(id) ON DELETE RESTRICT,
+            language_code TEXT NOT NULL,
             search_term_used TEXT NOT NULL,
             attempt_status_id INTEGER NOT NULL REFERENCES attempt_statuses(id) ON DELETE RESTRICT,
             error_type_id INTEGER REFERENCES error_types(id) ON DELETE RESTRICT,
@@ -119,38 +119,27 @@ def upgrade():
     """)
 
     op.execute("""
-        CREATE TABLE IF NOT EXISTS collected_contents (
+        CREATE TABLE IF NOT EXISTS raw_data (
             id SERIAL PRIMARY KEY,
             collection_attempt_id INTEGER NOT NULL REFERENCES collection_attempts(id) ON DELETE CASCADE,
-            content_type_id INTEGER NOT NULL REFERENCES collected_content_types(id) ON DELETE RESTRICT,
-            content_metadata_schema_id INTEGER NOT NULL REFERENCES content_metadata_schemas(id) ON DELETE RESTRICT,
+            raw_data_metadata_schema_id INTEGER NOT NULL REFERENCES raw_data_metadata_schemas(id) ON DELETE RESTRICT,
             title TEXT NOT NULL,
-            main_content TEXT NOT NULL,
-            url TEXT,
+            language_code TEXT NOT NULL,
+            url TEXT NULL,
+            metadata jsonb NOT NULL,
             validation_status_id INTEGER NOT NULL REFERENCES validation_statuses(id) ON DELETE RESTRICT,
             validation_error JSON,
-            filepath_of_save TEXT NOT NULL,
+            filepath_of_save TEXT NULL,
             created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-        );
-    """)
-
-    op.execute("""
-        CREATE TABLE IF NOT EXISTS collected_content_metadata (
-            id SERIAL PRIMARY KEY,
-            collected_content_id INTEGER NOT NULL REFERENCES collected_contents(id) ON DELETE CASCADE,
-            metadata_key TEXT NOT NULL,
-            metadata_value TEXT NOT NULL,
-
-            CONSTRAINT unique_content_metadata UNIQUE (collected_content_id, metadata_key)
         );
     """)
 
     op.execute("""
         CREATE TABLE IF NOT EXISTS debug_wikipedia_results (
             id SERIAL PRIMARY KEY,
-            collection_config_id INTEGER NOT NULL REFERENCES collection_configs(id) ON DELETE CASCADE,
+            collection_target_id INTEGER NOT NULL REFERENCES collection_targets(id) ON DELETE CASCADE,
             search_term_used TEXT NOT NULL,
-            language_code_used TEXT NOT NULL,
+            language_code TEXT NOT NULL,
             test_status TEXT NOT NULL,
             search_results_found JSON NOT NULL DEFAULT '[]',
             error_message TEXT NOT NULL DEFAULT '',
@@ -183,18 +172,37 @@ def upgrade():
         );
     """)
 
+    op.execute("""
+    CREATE TABLE IF NOT EXISTS cleaned_data (
+        id SERIAL PRIMARY KEY,
+        raw_data_id INTEGER NOT NULL REFERENCES raw_data(id) ON DELETE CASCADE,
+        cleaned_data_metadata_schema_id INTEGER NOT NULL REFERENCES cleaned_data_metadata_schemas(id) ON DELETE RESTRICT,
+        title TEXT NOT NULL,
+        language_code TEXT NOT NULL,
+        url TEXT NULL,
+        metadata jsonb NOT NULL,
+        validation_status_id INTEGER NOT NULL REFERENCES validation_statuses(id) ON DELETE RESTRICT,
+        validation_error JSON,
+        cleaner_used TEXT NOT NULL,
+        cleaner_version TEXT NOT NULL,
+        cleaning_time_ms INTEGER NOT NULL,
+        cleaned_at TIMESTAMP WITH TIME ZONE NOT NULL,
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+    );
+    """)
+
     # INDEXES
     op.execute("""
-        CREATE INDEX IF NOT EXISTS idx_collection_configs_collector_types ON collection_configs(collector_name_id, collection_type_id);
+        CREATE INDEX IF NOT EXISTS idx_collection_targets_collector_types ON collection_targets(collector_name_id, collection_type_id);
     """)
     op.execute("""
-        CREATE INDEX IF NOT EXISTS idx_collection_configs_is_collected ON collection_configs(is_collected);
+        CREATE INDEX IF NOT EXISTS idx_collection_targets_is_collected ON collection_targets(is_collected);
     """)
     op.execute("""
-        CREATE INDEX IF NOT EXISTS idx_collection_configs_language_code ON collection_configs(language_code);
+        CREATE INDEX IF NOT EXISTS idx_collection_targets_language_code ON collection_targets(language_code);
     """)
     op.execute("""
-        CREATE INDEX IF NOT EXISTS idx_collection_attempts_config_id ON collection_attempts(collection_config_id);
+        CREATE INDEX IF NOT EXISTS idx_collection_attempts_config_id ON collection_attempts(collection_target_id);
     """)
     op.execute("""
         CREATE INDEX IF NOT EXISTS idx_collection_attempts_status_id ON collection_attempts(attempt_status_id);
@@ -206,25 +214,19 @@ def upgrade():
         CREATE INDEX IF NOT EXISTS idx_collection_attempts_error_type_id ON collection_attempts(error_type_id);
     """)
     op.execute("""
-        CREATE INDEX IF NOT EXISTS idx_collected_contents_attempt_id ON collected_contents(collection_attempt_id);
+        CREATE INDEX IF NOT EXISTS idx_raw_data_attempt_id ON raw_data(collection_attempt_id);
     """)
     op.execute("""
-        CREATE INDEX IF NOT EXISTS idx_collected_contents_validation_status_id ON collected_contents(validation_status_id);
+        CREATE INDEX IF NOT EXISTS idx_raw_data_validation_status_id ON raw_data(validation_status_id);
     """)
     op.execute("""
-        CREATE INDEX IF NOT EXISTS idx_collected_contents_title ON collected_contents(title);
+        CREATE INDEX IF NOT EXISTS idx_raw_data_title ON raw_data(title);
     """)
     op.execute("""
-        CREATE INDEX IF NOT EXISTS idx_collected_contents_created_at ON collected_contents(created_at);
+        CREATE INDEX IF NOT EXISTS idx_raw_data_created_at ON raw_data(created_at);
     """)
     op.execute("""
-        CREATE INDEX IF NOT EXISTS idx_content_metadata_content_id ON collected_content_metadata(collected_content_id);
-    """)
-    op.execute("""
-        CREATE INDEX IF NOT EXISTS idx_content_metadata_key ON collected_content_metadata(metadata_key);
-    """)
-    op.execute("""
-        CREATE INDEX IF NOT EXISTS idx_debug_wikipedia_results_collection_config_id ON debug_wikipedia_results(collection_config_id);
+        CREATE INDEX IF NOT EXISTS idx_debug_wikipedia_results_collection_target_id ON debug_wikipedia_results(collection_target_id);
     """)
     op.execute("""
         CREATE INDEX IF NOT EXISTS idx_debug_wikipedia_results_test_status ON debug_wikipedia_results(test_status);
@@ -247,6 +249,15 @@ def upgrade():
     op.execute("""
         CREATE INDEX IF NOT EXISTS idx_link_attempts_to_runs_run_collection_metadata_id ON link_attempts_to_runs(run_collection_metadata_id);
     """)
+    op.execute("""
+    CREATE INDEX IF NOT EXISTS idx_cleaned_data_raw_data_id ON cleaned_data(raw_data_id);
+    """)
+    op.execute("""
+        CREATE INDEX IF NOT EXISTS idx_cleaned_data_validation_status_id ON cleaned_data(validation_status_id);
+    """)
+    op.execute("""
+        CREATE INDEX IF NOT EXISTS idx_cleaned_data_created_at ON cleaned_data(created_at);
+    """)
 
     # COMMENTS
     op.execute("""
@@ -256,16 +267,13 @@ def upgrade():
         COMMENT ON TABLE collection_types IS 'Lookup table for collection types';
     """)
     op.execute("""
-        COMMENT ON TABLE collection_configs IS 'Configuration of what needs to be collected';
+        COMMENT ON TABLE collection_targets IS 'Configuration of what needs to be collected';
     """)
     op.execute("""
         COMMENT ON TABLE collection_attempts IS 'Log of each collection attempt';
     """)
     op.execute("""
-        COMMENT ON TABLE collected_contents IS 'Table storing collected content from collectors';
-    """)
-    op.execute("""
-        COMMENT ON TABLE collected_content_metadata IS 'Key : Value metadata for collected data';
+        COMMENT ON TABLE raw_data IS 'Table storing collected content from collectors';
     """)
     op.execute("""
         COMMENT ON TABLE debug_wikipedia_results IS 'Results from debug testing of wikipedia collector';
@@ -276,19 +284,25 @@ def upgrade():
     op.execute("""
         COMMENT ON TABLE link_attempts_to_runs IS 'Link table between collection_attempts and run_collection_metadata';
     """)
+    op.execute("""
+    COMMENT ON TABLE cleaned_data IS 'Table storing cleaned data derived from raw_data table';
+    """)
+    op.execute("""
+        COMMENT ON TABLE cleaned_data_metadata_schemas IS 'Schema definitions for cleaned data metadata validation';
+    """)
 
     # COLUMN COMMENTS
     op.execute("""
-        COMMENT ON COLUMN collection_configs.is_collected IS 'Whether or not this configuration has beeen successfully collected (True = Collected)';
+        COMMENT ON COLUMN collection_targets.is_collected IS 'Whether or not this configuration has beeen successfully collected (True = Collected)';
     """)
     op.execute("""
-        COMMENT ON COLUMN collection_attempts.language_code_used IS 'Actual language code used during the collection attempt';
+        COMMENT ON COLUMN collection_attempts.language_code IS 'Actual language code used during the collection attempt';
     """)
     op.execute("""
         COMMENT ON COLUMN collection_attempts.search_term_used IS 'Actual search term used during collection attempt';
     """)
     op.execute("""
-        COMMENT ON COLUMN collected_contents.validation_error IS 'JSON object containing the validation error details if the validation has failed';
+        COMMENT ON COLUMN raw_data.validation_error IS 'JSON object containing the validation error details if the validation has failed';
     """)
     op.execute("""
         COMMENT ON COLUMN debug_wikipedia_results.test_duration IS 'Test duration in miliseconds';
@@ -301,15 +315,15 @@ def downgrade():
     op.execute("DROP TABLE IF EXISTS link_attempts_to_runs CASCADE;")
     op.execute("DROP TABLE IF EXISTS run_collection_metadata CASCADE;")
     op.execute("DROP TABLE IF EXISTS debug_wikipedia_results CASCADE;")
-    op.execute("DROP TABLE IF EXISTS collected_content_metadata CASCADE;")
-    op.execute("DROP TABLE IF EXISTS collected_contents CASCADE;")
+    op.execute("DROP TABLE IF EXISTS raw_data CASCADE;")
     op.execute("DROP TABLE IF EXISTS collection_attempts CASCADE;")
-    op.execute("DROP TABLE IF EXISTS collection_configs CASCADE;")
+    op.execute("DROP TABLE IF EXISTS collection_targets CASCADE;")
+    op.execute("DROP TABLE IF EXISTS cleaned_data CASCADE;")
 
-    op.execute("DROP TABLE IF EXISTS content_metadata_schemas CASCADE;")
+    op.execute("DROP TABLE IF EXISTS raw_data_metadata_schemas CASCADE;")
+    op.execute("DROP TABLE IF EXISTS cleaned_data_metadata_schemas CASCADE;")
     op.execute("DROP TABLE IF EXISTS run_statuses CASCADE;")
     op.execute("DROP TABLE IF EXISTS run_types CASCADE;")
-    op.execute("DROP TABLE IF EXISTS collected_content_types CASCADE;")
     op.execute("DROP TABLE IF EXISTS validation_statuses CASCADE;")
     op.execute("DROP TABLE IF EXISTS error_types CASCADE;")
     op.execute("DROP TABLE IF EXISTS attempt_statuses CASCADE;")

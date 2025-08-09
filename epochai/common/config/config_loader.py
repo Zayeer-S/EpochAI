@@ -184,9 +184,9 @@ class ConfigLoader:
             wikipedia_yaml_config = ConfigLoader.get_wikipedia_yaml_config()
             collector_name = wikipedia_yaml_config["collector_name"]
 
-            from epochai.common.database.collection_config_manager import CollectionConfigManager
+            from epochai.common.database.collection_targets_manager import CollectionTargetManager
 
-            all_configs["wikipedia"] = CollectionConfigManager.get_combined_wikipedia_config(
+            all_configs["wikipedia"] = CollectionTargetManager.get_combined_wikipedia_target_config(
                 collector_name=collector_name,
             )
         except Exception as e:
@@ -201,13 +201,19 @@ class ConfigLoader:
         wikipedia_yaml_config = ConfigLoader.get_wikipedia_yaml_config()
         collector_name = wikipedia_yaml_config["api"]["collector_name"]
 
-        from epochai.common.database.collection_config_manager import CollectionConfigManager
+        from epochai.common.database.collection_targets_manager import CollectionTargetManager
 
-        return CollectionConfigManager.get_combined_wikipedia_config(collector_name=collector_name)
+        result: Dict[str, Any] = CollectionTargetManager.get_combined_wikipedia_target_config(
+            collector_name=collector_name,
+        )
+
+        return result
 
     @staticmethod
     def get_collection_status_summary() -> Dict[str, Any]:
         """Gets collection status summary"""
-        from epochai.common.database.collection_config_manager import CollectionConfigManager
+        from epochai.common.database.collection_targets_manager import CollectionTargetManager
 
-        return CollectionConfigManager.get_collection_configs_from_database()
+        result: Dict[str, Any] = CollectionTargetManager.get_collection_status_summary()
+
+        return result
