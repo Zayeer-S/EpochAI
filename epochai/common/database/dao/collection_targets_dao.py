@@ -2,18 +2,18 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
 from epochai.common.database.database import get_database
-from epochai.common.database.models import CollectionConfigs
+from epochai.common.database.models import CollectionTargets
 from epochai.common.logging_config import get_logger
 
 
-class CollectionConfigsDAO:
-    """DAO for collection_configs table"""
+class CollectionTargetsDAO:
+    """DAO for collection_targets table"""
 
     def __init__(self):
         self.db = get_database()
         self.logger = get_logger(__name__)
 
-    def create_collection_config(
+    def create_collection_target(
         self,
         collector_name_id: int,
         collection_type_id: int,
@@ -22,14 +22,14 @@ class CollectionConfigsDAO:
         is_collected: bool = False,
     ) -> Optional[int]:
         """
-        Creates a new collection config entry
+        Creates a new collection target entry
 
         Returns:
             ID of created config or None if failure
         """
 
         query = """
-            INSERT INTO collection_configs
+            INSERT INTO collection_targets
             (collector_name_id, collection_type_id, language_code, collection_name, is_collected, updated_at, created_at)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
             RETURNING id
@@ -49,43 +49,43 @@ class CollectionConfigsDAO:
             result = self.db.execute_insert_query(query, params)
 
             if result:
-                self.logger.info(f"Created collection config: '{collection_name}' ({language_code})")
+                self.logger.info(f"Created collection target: '{collection_name}' ({language_code})")
                 return result
             self.logger.error(
-                f"Failed to create collection config: '{collection_name}' ({language_code})",
+                f"Failed to create collection target: '{collection_name}' ({language_code})",
             )
             return None
 
         except Exception as general_error:
             self.logger.error(
-                f"Error creating collection config '{collection_name}' ({language_code}): {general_error}",
+                f"Error creating collection target '{collection_name}' ({language_code}): {general_error}",
             )
             return None
 
     def get_by_id(
         self,
-        config_id: int,
-    ) -> Optional[CollectionConfigs]:
-        """Gets collection config by id"""
+        target_id: int,
+    ) -> Optional[CollectionTargets]:
+        """Gets collection target by id"""
 
         query = """
-            SELECT * FROM collection_configs WHERE id = %s
+            SELECT * FROM collection_targets WHERE id = %s
         """
 
         try:
-            results = self.db.execute_select_query(query, (config_id,))
+            results = self.db.execute_select_query(query, (target_id,))
             if results:
-                return CollectionConfigs.from_dict(results[0])
+                return CollectionTargets.from_dict(results[0])
             return None
 
         except Exception as general_error:
-            self.logger.error(f"Error getting collection config by id {config_id}: {general_error}")
+            self.logger.error(f"Error getting collection target by id {target_id}: {general_error}")
             return None
 
-    def get_all(self) -> List[CollectionConfigs]:
-        """Gets all collection configs"""
+    def get_all(self) -> List[CollectionTargets]:
+        """Gets all collection targets"""
         query = """
-            Select * FROM collection_configs ORDER BY created_at DESC
+            Select * FROM collection_targets ORDER BY created_at DESC
         """
 
         try:
@@ -97,37 +97,37 @@ class CollectionConfigsDAO:
                 )
                 return []
 
-            return [CollectionConfigs.from_dict(row) for row in results]
+            return [CollectionTargets.from_dict(row) for row in results]
 
         except Exception as general_error:
-            self.logger.error(f"Error getting all collection configs: {general_error}")
+            self.logger.error(f"Error getting all collection targets: {general_error}")
             return []
 
     def get_by_collection_status(
         self,
         is_collected: bool,
-    ) -> List[CollectionConfigs]:
-        """Gets configs by collection status"""
+    ) -> List[CollectionTargets]:
+        """Gets targets by collection status"""
 
         query = """
-            SELECT * FROM collection_configs WHERE is_collected = %s ORDER BY created_at ASC
+            SELECT * FROM collection_targets WHERE is_collected = %s ORDER BY created_at ASC
         """
 
         try:
             results = self.db.execute_select_query(query, (is_collected,))
-            return [CollectionConfigs.from_dict(row) for row in results]
+            return [CollectionTargets.from_dict(row) for row in results]
 
         except Exception as general_error:
-            self.logger.error(f"Error getting configs by collection status '{is_collected}': {general_error}")
+            self.logger.error(f"Error getting targets by collection status '{is_collected}': {general_error}")
             return []
 
     def get_uncollected_by_type_and_language(
         self,
         collection_types: str,
         language_code: str,
-    ) -> List[CollectionConfigs]:
+    ) -> List[CollectionTargets]:
         """
-        Gets uncollected configs by their collection type and language
+        Gets uncollected targets by their collection type and language
 
         Note:
             I'm sorry to whoever sees this in the future for making the function name so long
@@ -135,7 +135,7 @@ class CollectionConfigsDAO:
 
         query = """
             SELECT cc.*
-            FROM collection_configs cc
+            FROM collection_targets cc
             JOIN collection_types ct ON cc.collection_type_id = ct.id
             WHERE ct.collection_type = %s
             AND cc.language_code = %s
@@ -145,26 +145,26 @@ class CollectionConfigsDAO:
 
         try:
             results = self.db.execute_select_query(query, (collection_types, language_code))
-            configs = [CollectionConfigs.from_dict(row) for row in results]
+            targets = [CollectionTargets.from_dict(row) for row in results]
 
-            """self.logger.info(f"Found {len(configs)} uncollected in type '{collection_types}' for language code '{language_code}'")"""  # noqa
-            return configs
+            """self.logger.info(f"Found {len(targets)} uncollected in type '{collection_types}' for language code '{language_code}'")"""  # noqa
+            return targets
 
         except Exception as general_error:
             self.logger.error(
-                f"Error getting uncollected {collection_types} in type '{collection_types}' configs for language code '{language_code}': {general_error}",  # noqa
+                f"Error getting uncollected {collection_types} in type '{collection_types}' targets for language code '{language_code}': {general_error}",  # noqa
             )
             return []
 
     def get_uncollected_by_type(
         self,
         collection_type: str,
-    ) -> List[CollectionConfigs]:
-        """Gets all uncollected configs by type across all languages"""
+    ) -> List[CollectionTargets]:
+        """Gets all uncollected targets by type across all languages"""
 
         query = """
             SELECT cc.*
-            FROM collection_configs cc
+            FROM collection_targets cc
             JOIN collection_types ct ON cc.collection_type_id = ct.id
             WHERE ct.collection_type = %s
             AND cc.is_collected = false
@@ -173,28 +173,28 @@ class CollectionConfigsDAO:
 
         try:
             results = self.db.execute_select_query(query, (collection_type,))
-            configs = [CollectionConfigs.from_dict(row) for row in results]
+            targets = [CollectionTargets.from_dict(row) for row in results]
 
             self.logger.info(
-                f"Found {len(configs)} uncollected {collection_type} configs across all languages",
+                f"Found {len(targets)} uncollected {collection_type} targets across all languages",
             )
-            return configs
+            return targets
 
         except Exception as general_error:
-            self.logger.error(f"Error getting uncollected {collection_type} configs: {general_error}")
+            self.logger.error(f"Error getting uncollected {collection_type} targets: {general_error}")
             return []
 
     def get_uncollected_grouped_by_language(
         self,
         collection_type: str,
-    ) -> Dict[str, List[CollectionConfigs]]:
+    ) -> Dict[str, List[CollectionTargets]]:
         """
-        Gets all uncolected configs grouped by language for easier processing
+        Gets all uncolected targets grouped by language for easier processing
         """
-        configs = self.get_uncollected_by_type(collection_type)
-        grouped: Dict[str, List[CollectionConfigs]] = {}
+        targets = self.get_uncollected_by_type(collection_type)
+        grouped: Dict[str, List[CollectionTargets]] = {}
 
-        for config in configs:
+        for config in targets:
             if config.language_code not in grouped:
                 grouped[config.language_code] = []
             grouped[config.language_code].append(config)
@@ -203,70 +203,70 @@ class CollectionConfigsDAO:
 
     def mark_as_collected(
         self,
-        config_id: int,
+        target_id: int,
     ) -> bool:
         """Marks a row as collected"""
 
         query = """
-            UPDATE collection_configs
+            UPDATE collection_targets
             SET is_collected = true, updated_at = %s
             WHERE id = %s
         """
 
         try:
-            affected_rows = self.db.execute_update_delete_query(query, (datetime.now(), config_id))
+            affected_rows = self.db.execute_update_delete_query(query, (datetime.now(), target_id))
 
             if affected_rows > 0:
-                self.logger.info(f"Marked config {config_id} as collected")
+                self.logger.info(f"Marked target {target_id} as collected")
                 return True
-            self.logger.warning(f"No config found with id '{config_id}' to mark as collected")
+            self.logger.warning(f"No target found with id '{target_id}' to mark as collected")
             return False
 
         except Exception as general_error:
-            self.logger.error(f"Error marking config with id '{config_id} as collected: {general_error}'")
+            self.logger.error(f"Error marking target with id '{target_id} as collected: {general_error}'")
             return False
 
     def mark_as_uncollected(
         self,
-        config_id: int,
+        target_id: int,
     ) -> bool:
         """Marks a row as uncollected"""
 
         query = """
-            UPDATE collection_configs
+            UPDATE collection_targets
             SET is_collected = false, updated_at = %s
             WHERE id = %s
         """
 
         try:
-            affected_rows = self.db.execute_update_delete_query(query, (datetime.now(), config_id))
+            affected_rows = self.db.execute_update_delete_query(query, (datetime.now(), target_id))
 
             if affected_rows > 0:
-                self.logger.info(f"Marked config {config_id} as uncollected")
+                self.logger.info(f"Marked target {target_id} as uncollected")
                 return True
-            self.logger.warning(f"No config found with id '{config_id}' to mark as uncollected")
+            self.logger.warning(f"No target found with id '{target_id}' to mark as uncollected")
             return False
 
         except Exception as general_error:
-            self.logger.error(f"Error marking config with id '{config_id} as uncollected: {general_error}'")
+            self.logger.error(f"Error marking target with id '{target_id} as uncollected: {general_error}'")
             return False
 
-    def bulk_create_configs(
+    def bulk_create_collection_targets(
         self,
-        collection_configs: List[Tuple[int, int, str, str, bool]],
+        collection_targets: List[Tuple[int, int, str, str, bool]],
     ) -> int:
         """
-        Bulk creates multiple configs
+        Bulk creates multiple targets
 
         Returns:
-            Number of successfully created configs
+            Number of successfully created targets
         """
 
-        if not collection_configs:
+        if not collection_targets:
             return 0
 
         query = """
-            INSERT INTO collection_configs
+            INSERT INTO collection_targets
             (collector_name_id, collection_type_id, language_code, collection_name, is_collected, updated_at, created_at)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
         """  # noqa
@@ -275,7 +275,7 @@ class CollectionConfigsDAO:
             operations = []
             now = datetime.now()
 
-            for config_data in collection_configs:
+            for config_data in collection_targets:
                 (
                     collector_name_id,
                     collection_type_id,
@@ -297,13 +297,13 @@ class CollectionConfigsDAO:
             success = self.db.execute_transaction(operations)
 
             if success:
-                self.logger.info(f"Successfully bulk created {len(collection_configs)} collection configs")
-                return len(collection_configs)
-            self.logger.error("Failed to bulk create collection configs")
+                self.logger.info(f"Successfully bulk created {len(collection_targets)} collection targets")
+                return len(collection_targets)
+            self.logger.error("Failed to bulk create collection targets")
             return 0
 
         except Exception as general_error:
-            self.logger.error(f"Error bulk creating configs: {general_error}")
+            self.logger.error(f"Error bulk creating target: {general_error}")
             return 0
 
     def get_collection_status(self) -> Dict[str, Any]:
@@ -312,10 +312,10 @@ class CollectionConfigsDAO:
             SELECT
                 ct.collection_type,
                 cc.language_code,
-                COUNT(*) as total_configs,
+                COUNT(*) as total_targets,
                 SUM(CASE WHEN cc.is_collected THEN 1 ELSE 0 END) as collected_count,
                 SUM(CASE WHEN NOT cc.is_collected THEN 1 ELSE 0 END) as uncollected_count
-            FROM collection_configs cc
+            FROM collection_targets cc
             JOIN collection_types ct ON cc.collection_type_id = ct.id
             GROUP BY ct.collection_type, cc.language_code
             ORDER BY ct.collection_type, cc.language_code
@@ -324,16 +324,16 @@ class CollectionConfigsDAO:
         try:
             results = self.db.execute_select_query(query)
 
-            total_configs = sum(row["total_configs"] for row in results)
+            total_targets = sum(row["total_targets"] for row in results)
             total_collected = sum(row["collected_count"] for row in results)
             total_uncollected = sum(row["uncollected_count"] for row in results)
 
             summary = {
-                "total_configs": total_configs,
+                "total_targets": total_targets,
                 "total_collected": total_collected,
                 "total_uncollected": total_uncollected,
-                "collection_percentage": round((total_collected / total_configs * 100), 2)
-                if total_configs > 0
+                "collection_percentage": round((total_collected / total_targets * 100), 2)
+                if total_targets > 0
                 else 0,
             }
 
@@ -350,56 +350,56 @@ class CollectionConfigsDAO:
 
     def delete_config(
         self,
-        config_id: int,
+        target_id: int,
     ) -> bool:
-        """Deletes a collection config"""
+        """Deletes a collection target"""
 
         query = """
-            DELETE FROM collection_configs WHERE id = %s
+            DELETE FROM collection_targets WHERE id = %s
         """
 
         try:
-            affected_rows = self.db.execute_update_delete_query(query, (config_id,))
+            affected_rows = self.db.execute_update_delete_query(query, (target_id,))
 
             if affected_rows > 0:
-                self.logger.info(f"Deleted collection config {config_id}")
+                self.logger.info(f"Deleted collection target {target_id}")
                 return True
-            self.logger.warning(f"No config found with id {config_id} to delete")
+            self.logger.warning(f"No target found with id {target_id} to delete")
             return False
 
         except Exception as general_error:
-            self.logger.error(f"Error deleting config {config_id}: {general_error}")
+            self.logger.error(f"Error deleting target {target_id}: {general_error}")
             return False
 
     def search_by_name(
         self,
         search_term: str,
-    ) -> List[CollectionConfigs]:
-        """Search configs by collection name"""
+    ) -> List[CollectionTargets]:
+        """Search targets by collection name"""
 
         query = """
-            SELECT * FROM collection_configs WHERE collection_name ILIKE %s ORDER BY collection_name
+            SELECT * FROM collection_targets WHERE collection_name ILIKE %s ORDER BY collection_name
         """
 
         try:
             search_pattern = f"%{search_term}%"
             results = self.db.execute_select_query(query, (search_pattern,))
-            return [CollectionConfigs.from_dict(row) for row in results]
+            return [CollectionTargets.from_dict(row) for row in results]
 
         except Exception as general_error:
-            self.logger.error(f"Error searching configs by name '{search_term}': {general_error}")
+            self.logger.error(f"Error searching targets by name '{search_term}': {general_error}")
             return []
 
     def get_by_collector_and_type(
         self,
         collector_name: str,
         collection_type: str,
-    ) -> List[CollectionConfigs]:
-        """Gets configs by collector name and collection type"""
+    ) -> List[CollectionTargets]:
+        """Gets targets by collector name and collection type"""
 
         query = """
             SELECT cc.*
-            FROM collection_configs cc
+            FROM collection_targets cc
             JOIN collector_names cn ON cc.collector_name_id = cn.id
             JOIN collection_types ct ON cc.collection_type_id = ct.id
             WHERE cn.collector_name = %s AND ct.collection_type = %s
@@ -408,10 +408,10 @@ class CollectionConfigsDAO:
 
         try:
             results = self.db.execute_select_query(query, (collector_name, collection_type))
-            return [CollectionConfigs.from_dict(row) for row in results]
+            return [CollectionTargets.from_dict(row) for row in results]
 
         except Exception as general_error:
             self.logger.error(
-                f"Error getting configs for collector '{collector_name}' and type '{collection_type}': {general_error}",  # noqa
+                f"Error getting targets for collector '{collector_name}' and type '{collection_type}': {general_error}",  # noqa
             )
             return []
