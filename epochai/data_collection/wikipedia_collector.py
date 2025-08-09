@@ -80,7 +80,7 @@ class WikipediaPoliticalCollector:
                 self.logger.debug(f"Successfully collected ({language_code}): {item}")
 
                 if self.save_to_database:
-                    collection_config_id = self.wikipedia_saver.get_collection_config_id(
+                    collection_config_id = self.wikipedia_saver.get_collection_target_id(
                         collection_type,
                         language_code,
                         item,
@@ -139,7 +139,7 @@ class WikipediaPoliticalCollector:
         for collection_config_id, items in items_by_config_id.items():
             success_count = self.wikipedia_saver.save_incrementally_to_database(
                 collected_data=items,
-                collection_config_id=collection_config_id,
+                collection_target_id=collection_config_id,
                 language_code=self.current_language_code,
             )
 
