@@ -2,7 +2,7 @@ from datetime import datetime
 import time
 
 from epochai.common.config.config_loader import ConfigLoader
-from epochai.common.database.dao.collection_configs_dao import CollectionConfigsDAO
+from epochai.common.database.dao.collection_targets_dao import CollectionTargetsDAO
 from epochai.common.database.dao.debug_wikipedia_results_dao import DebugWikipediaResultsDAO
 from epochai.common.logging_config import get_logger
 from epochai.common.utils.wikipedia_utils import WikipediaUtils
@@ -31,7 +31,7 @@ if not wiki_utils:
 
 logger = get_logger(__name__)
 debug_wikipedia_results_dao = DebugWikipediaResultsDAO()
-collection_config_dao = CollectionConfigsDAO()
+collection_targets_dao = CollectionTargetsDAO()
 wikipedia_saver = WikipediaSaver()
 
 test_pages = []
@@ -39,17 +39,17 @@ test_pages = []
 # Build test pages list with proper structure (title, language, type)
 for _language_code, politician_list in wiki_config["politicians"].items():
     for politician in politician_list:
-        test_pages.append((politician, _language_code, "politician"))
+        test_pages.append((politician, _language_code, "politicians"))
 
 for _language_code, topic_list in wiki_config["political_topics"].items():
     for topic in topic_list:
-        test_pages.append((topic, _language_code, "topic"))
+        test_pages.append((topic, _language_code, "political_topics"))
 
 for _language_code, template_list in wiki_config["political_events_template"].items():
     for year in wiki_config["collection_years"]:
         for template in template_list:
             formatted_event = template.format(year=year)
-            test_pages.append((formatted_event, _language_code, "event"))
+            test_pages.append((formatted_event, _language_code, "political_topics"))
 
 print("=== TESTING WIKIPEDIA PAGE ACCESS ===")
 print(f"Testing {len(test_pages)} pages from configuration")
@@ -62,7 +62,7 @@ for page_title, _language_code, page_type in test_pages:
 
     start_time = time.time()
 
-    collection_config_id = wikipedia_saver.get_collection_config_id(page_type, _language_code, page_title)
+    collection_target_id = wikipedia_saver.get_collection_target_id(page_type, _language_code, page_title)
 
     page = wiki_utils.get_wikipedia_page(page_title, _language_code)
 
@@ -74,12 +74,12 @@ for page_title, _language_code, page_type in test_pages:
         print(f"\tURL: {page.url}")
         print(f"\tSummary: {page.summary[:100]}...")
 
-        if collection_config_id:
+        if collection_target_id:
             try:
                 debug_wikipedia_results_dao.create_debug_result(
-                    collection_config_id=collection_config_id,
+                    collection_target_id=collection_target_id,
                     search_term_used=page_title,
-                    language_code_used=_language_code,
+                    language_code=_language_code,
                     test_status="success",
                     search_results_found=[page.title],
                     error_message="",
@@ -94,7 +94,7 @@ for page_title, _language_code, page_type in test_pages:
 
         else:
             logger.warning(
-                f"No collection_config_id found for '{page_title}', not logging test to database for this",
+                f"No collection_target_id found for '{page_title}', not logging test to database for this",
             )
 
         success_count += 1
@@ -107,12 +107,12 @@ for page_title, _language_code, page_type in test_pages:
             print(f"\tSearch Suggestions: {search_results[:3]}")
             print(f"\tRecommendation: Use '{search_results[0]}' instead of '{page_title}'")
 
-            if collection_config_id:
+            if collection_target_id:
                 try:
                     debug_wikipedia_results_dao.create_debug_result(
-                        collection_config_id=collection_config_id,
+                        collection_target_id=collection_target_id,
                         search_term_used=page_title,
-                        language_code_used=_language_code,
+                        language_code=_language_code,
                         test_status="failed_with_suggestions",
                         search_results_found=search_results[:5],
                         error_message=f"Page not found, instead {len(search_results)} suggestions found",
@@ -127,12 +127,12 @@ for page_title, _language_code, page_type in test_pages:
         else:
             print(f"\tNo search results found - '{page_title}' may not exist on Wikipedia")
 
-            if collection_config_id:
+            if collection_target_id:
                 try:
                     debug_wikipedia_results_dao.create_debug_result(
-                        collection_config_id=collection_config_id,
+                        collection_target_id=collection_target_id,
                         search_term_used=page_title,
-                        language_code_used=_language_code,
+                        language_code=_language_code,
                         test_status="failed",
                         search_results_found=[],
                         error_message="No search results found, page might not exist",
@@ -169,7 +169,7 @@ try:
 
     print("\nBy language")
     for lang_stat in db_stats["by_language"]:
-        lang = lang_stat["language_code_used"]
+        lang = lang_stat["language_code"]
         total = lang_stat["test_count"]
         success = lang_stat["success_count"]
         failed = lang_stat["failed_count"]
@@ -219,7 +219,7 @@ try:
 
     if recent_failed_24h:
         for test in recent_failed_24h[:10]:
-            print(f"  '{test.search_term_used}' ({test.language_code_used}) - {test.error_message}")
+            print(f"  '{test.search_term_used}' ({test.language_code}) - {test.error_message}")
     else:
         print("  No failed tests in the last 24 hours!")
 
