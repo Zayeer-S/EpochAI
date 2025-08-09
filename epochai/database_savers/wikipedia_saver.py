@@ -4,6 +4,7 @@ from epochai.common.config.config_loader import ConfigLoader
 from epochai.common.database.dao.collection_attempts_dao import CollectionAttemptsDAO
 from epochai.common.database.dao.collection_targets_dao import CollectionTargetsDAO
 from epochai.common.database.dao.raw_data_dao import RawDataDAO
+from epochai.common.database.dao.raw_data_metadata_schemas_dao import RawDataMetadataSchemasDAO
 from epochai.common.logging_config import get_logger
 from epochai.common.utils.data_utils import DataUtils
 
@@ -23,6 +24,7 @@ class WikipediaSaver:
                 self.collection_attempts_dao = CollectionAttemptsDAO()
                 self.raw_data_dao = RawDataDAO()
                 self.collection_targets_dao = CollectionTargetsDAO()
+                self.metadata_schemas_dao = RawDataMetadataSchemasDAO()
 
                 self.ATTEMPT_STATUS_ID = 1
                 self.VALIDATION_STATUS_ID = 1
@@ -36,6 +38,57 @@ class WikipediaSaver:
                 self.logger.error(f"General error in __init__: {general_error}")
             else:
                 print(f"General error in __init__ and self.logger returning false: {general_error}")
+
+    def _build_metadata_schema(
+        self,
+        schema_id: int,
+        collected_item: Dict[str, Any],
+        language_code: str,
+    ) -> Dict[str, Any]:
+        """Create metadata schema based off of database's"""
+
+        try:
+            schema_obj = self.metadata_schemas_dao.get_by_id(schema_id)
+            if not schema_obj or not schema_obj.metadata_schema:
+                self.logger.warning(f"No metadata schema found for ID {schema_id}")
+                return {}
+
+            schema_properties = schema_obj.metadata_schema.get("properties", {})
+            metadata = {}
+
+            # TODO: Change this to dynamic and move to data_util
+            for property_name, property_config in schema_properties.items():
+                if property_name in collected_item:
+                    metadata[property_name] = collected_item[property_name]
+                elif property_name == "language":
+                    metadata[property_name] = language_code
+                elif property_name == "page_id" and "pageid" in collected_item:
+                    metadata[property_name] = collected_item["pageid"]
+                elif property_name == "word_count":
+                    content = collected_item.get("content", "")
+                    if content:
+                        metadata[property_name] = len(content.split())
+                    else:
+                        metadata[property_name] = 0
+                elif property_name == "last_modified" and "timestamp" in collected_item:
+                    metadata[property_name] = collected_item["timestamp"]
+                else:
+                    # Handle the missing optional fields based on schema
+                    property_type = property_config.get("type")
+                    if property_name in schema_obj.metadata_schema.get("required", []):
+                        self.logger.warning(f"Required field '{property_name}' missing from collected item")
+                        if property_type == "string":
+                            metadata[property_name] = ""
+                        elif property_type == "integer":
+                            metadata[property_name] = 0
+                        elif property_type == "array":
+                            metadata[property_name] = []
+
+            return metadata
+
+        except Exception as general_error:
+            self.logger.error(f"Error building metadata schema: {general_error}")
+            return {}
 
     def save_locally_at_end(
         self,
@@ -84,16 +137,11 @@ class WikipediaSaver:
                     )
                     continue
 
-                metadata = {  # need to get this from the db
-                    "page_id": item.get("page_id"),
-                    "language": language_code,
-                    "title": title,
-                    "content": content,
-                    "categories": item.get("categories", []),
-                    "links": item.get("links", []),
-                    "word_count": len(content.split()) if content else 0,
-                    "last_modified": item.get("last_modified"),
-                }
+                metadata = self._build_metadata_schema(
+                    schema_id=self.METADATA_SCHEMA_ID,
+                    collected_item=item,
+                    language_code=language_code,
+                )
 
                 content_id = self.raw_data_dao.create_raw_data(
                     collection_attempt_id=attempt_id,
