@@ -25,6 +25,9 @@ data_settings:
     ]
     required_fields_wikipedia: ['title', 'content', 'url', 'language', 'collected_at']
 
+  data_cleaner:
+    min_content_length: 10
+
 # Default setup for collectors
 defaults:
   wikipedia:
