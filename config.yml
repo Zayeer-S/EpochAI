@@ -25,8 +25,11 @@ data_settings:
     ]
     required_fields_wikipedia: ['title', 'content', 'url', 'language', 'collected_at']
 
-  data_cleaner:
-    min_content_length: 10
+  cleaners:
+    wikipedia:
+      cleaner_name: "wikipedia_cleaner" # should prolly not change this
+      current_version: 1.0.0 # Lets us control which json schema to use
+      min_content_length: 10
 
 # Default setup for collectors
 defaults:

@@ -31,7 +31,7 @@ class BaseCleaner(ABC):
         self._validation_status_cache = self._load_validation_statuses()
 
         self.metadata_schema_id: Optional[int] = None
-        self.min_content_length = int(self.config["data_cleaner"]["min_content_length"])
+        self.min_content_length = int(self.config.get("cleaners").get("wikipedia").get("min_content_length"))
 
         self.logger.info(f"Initialized {self.cleaner_name} v{self.cleaner_version}")
 
