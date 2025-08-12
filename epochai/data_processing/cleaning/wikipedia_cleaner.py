@@ -28,7 +28,6 @@ class WikipediaCleaner(BaseCleaner):
         self._unicode_dashes_pattern = re.compile(r"[–—]")  # noqa
         self._multiple_newlines_pattern = re.compile(r"\n{3,}")
 
-        self.min_content_length = int(self.config.get("cleaners").get("wikipedia").get("min_content_length"))
         self.schema_cache_limit = int(self.config.get("cleaners").get("wikipedia").get("schema_cache_limit"))
 
         self._load_schema_from_database()
@@ -261,7 +260,7 @@ class WikipediaCleaner(BaseCleaner):
 
         if "cleaned_content" in cleaned_data:
             content = cleaned_data["cleaned_content"]
-            if len(content.strip() < self.min_content_length):
+            if len(content.strip() < 10):
                 validation_errors.append(f"Content too short: {len(content)} char")
 
         is_valid = len(validation_errors) == 0
