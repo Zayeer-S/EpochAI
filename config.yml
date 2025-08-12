@@ -29,7 +29,7 @@ data_settings:
     wikipedia:
       cleaner_name: "wikipedia_cleaner" # should prolly not change this
       current_version: 1.0.0 # Lets us control which json schema to use
-      min_content_length: 10
+      schema_cache_limit: 3
 
 # Default setup for collectors
 defaults:
