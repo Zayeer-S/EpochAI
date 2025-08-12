@@ -2,19 +2,25 @@ from datetime import datetime
 import re
 from typing import Any, Dict, List, Optional, Tuple
 
+from genson import SchemaBuilder
+import jsonschema
+from jsonschema import ValidationError
+
 from epochai.common.database.models import RawData
 from epochai.data_processing.cleaning.base_cleaner import BaseCleaner
 
 
 class WikipediaCleaner(BaseCleaner):
-    WIKIPEDIA_METADATA_SCHEMA_ID = 1
-
     def __init__(self):
         super().__init__(
-            cleaner_name="wikipedia_cleaner",
-            cleaner_version="1.0.0",
+            cleaner_name=self.config.get("cleaners").get("wikipedia").get("cleaner_name"),
+            cleaner_version=self.config.get("cleaners").get("wikipedia").get("current_version"),
         )
-        self.metadata_schema_id = self.WIKIPEDIA_METADATA_SCHEMA_ID
+        self.metadata_schema_cache: Optional[Dict[str, Any]] = None
+        self.schema_validator: Optional[jsonschema.protocols.Validator] = None
+        self.schema_generation_count: int = 0
+        self.temp_schemas: List[Dict[str, Any]] = []
+        self.metadata_schema_id: Optional[int] = None
 
         self._multiple_whitespace_pattern = re.compile(r"\s+")
         self._citation_pattern = re.compile(r"\[\d+\]|\[citation needed\]|\[clarification needed\]")
@@ -22,9 +28,121 @@ class WikipediaCleaner(BaseCleaner):
         self._unicode_dashes_pattern = re.compile(r"[–—]")  # noqa
         self._multiple_newlines_pattern = re.compile(r"\n{3,}")
 
+        self.min_content_length = int(self.config.get("cleaners").get("wikipedia").get("min_content_length"))
+        self.schema_cache_limit = int(self.config.get("cleaners").get("wikipedia").get("schema_cache_limit"))
+
+        self._load_schema_from_database()
+
         self.logger.info(f"Wikipedia Cleaner Initialized ({self.metadata_schema_id})")
 
+    def _load_schema_from_database(self) -> None:
+        """Load current metadata schema ffrom the the database"""
+
+        try:
+            all_schemas = self.cleaned_data_metadata_schema_dao.get_all()
+
+            for each_schema in all_schemas:
+                schema_content = each_schema.metadata_schema
+                if (
+                    isinstance(schema_content, dict)
+                    and schema_content.get("cleaner_name") == self.cleaner_name
+                    and schema_content.get("cleaner_version") == self.cleaner_version
+                ):
+                    self.metadata_schema_cache = schema_content
+                    self.metadata_schema_id = each_schema.id
+
+                    self._create_validator_using_schema(schema_content)
+
+                    self.logger.info(f"Loaded existing schema from database (id: {self.metadata_schema_id})")
+                    return
+
+            self.logger.info("No existing schema found in database")
+
+        except Exception as general_error:
+            self.logger.error(f"Error loading schema from database: {general_error}")
+
+        return
+
+    def _create_validator_using_schema(
+        self,
+        schema_content: Dict[str, Any],
+    ) -> None:
+        """Creates json schema validator using database schema"""
+        try:
+            only_schema = schema_content.get("schema")
+
+            self.schema_validator = jsonschema.Draft7Validator(only_schema)
+
+        except Exception as general_error:
+            self.logger.error(f"Error creating validator from schema: {general_error}")
+            self.schema_validator = None
+
+    def _generate_initial_schema_from_metadata(
+        self,
+        metadata: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        builder = SchemaBuilder()
+        builder.add_object(metadata)
+        generated_schema = builder.to_schema()
+
+        schema_with_metadata = {
+            "cleaner_name": self.cleaner_name,
+            "cleaner_version": self.cleaner_version,
+            "generated_at": datetime.now().isoformat(),
+            "schema": generated_schema,
+        }
+
+        return schema_with_metadata
+
+    def _should_cache_schema(
+        self,
+        new_schema: Dict[str, Any],
+    ) -> bool:
+        """Determines if we should cache schema if we reach enough consecutive schemas"""
+
+        self.temp_schemas.append(new_schema)
+
+        if len(self.temp_schemas) < self.schema_cache_limit:
+            return False
+
+        self.temp_schemas = self.temp_schemas[-3:]
+
+        first_schema = self.temp_schemas[0].get("schema", {})  # get schema structure but set contents as null
+        return all(schema.get("schema", {}) == first_schema for schema in self.temp_schemas)
+
+    def _cache_schema_to_database(
+        self,
+        schema: Dict[str, Any],
+    ) -> Optional[int]:
+        """
+        Caches schema to database
+
+        Note:
+            Can create new schema in database. Fallback for if automatic python schema building makes
+            a schema not found in the database.
+        """
+
+        try:
+            existing_schema = self.cleaned_data_metadata_schema_dao.find_schema_by_content(schema)
+            if existing_schema and existing_schema.id:
+                self.logger.info(f"Schema already exists in the database (id: {existing_schema.id})")
+                return existing_schema.id
+
+            new_schema_id = self.cleaned_data_metadata_schema_dao.create_schema(schema)
+            if new_schema_id:
+                self.logger.info(f"Cached new schema to database (id: {new_schema_id})")
+                return new_schema_id
+
+            self.logger.error("Failed to cache schema to database")
+            return None
+
+        except Exception as general_error:
+            self.logger.error(f"Error caching schema to database: {general_error}")
+            return None
+
     def get_metadata_schema_id(self) -> Optional[int]:
+        if self.metadata_schema_id is None:
+            self.logger.error("No metadata schema id available - check schema generation logs")
         return self.metadata_schema_id
 
     def clean_content(self, raw_data: RawData) -> Dict[str, Any]:
@@ -64,55 +182,87 @@ class WikipediaCleaner(BaseCleaner):
         metadata["original_content_length"] = len(metadata.get("content", ""))
         metadata["cleaning_operations_applied"] = self._get_cleaning_operations_list()
 
+        if self.metadata_schema_cache is None:
+            generated_schema = self._generate_initial_schema_from_metadata(metadata)
+
+            if self._should_cache_schema(generated_schema):
+                schema_id = self._cache_schema_to_database(generated_schema)
+                if schema_id:
+                    self.metadata_schema_cache = generated_schema
+                    self.metadata_schema_id = schema_id
+                    self._create_validator_using_schema(generated_schema)
+                else:
+                    raise RuntimeError("Failed to cache schema to database")
+            else:
+                self.logger.info(f"Schema generation in progress ({len(self.temp_schemas)} out of 3 matches)")
+
         return metadata
 
     def validate_cleaned_content(self, cleaned_data: Dict[str, Any]) -> Tuple[bool, Optional[Dict[str, Any]]]:
         """Validates cleaned wikipedia content"""
 
+        if self.schema_validator is not None:
+            return self._validate_with_json_schema(cleaned_data)
+
+        self.logger.info("Falling back to basic requirement validator")
+        return self._validate_basic_requirements(cleaned_data)
+
+    def _validate_with_json_schema(
+        self,
+        cleaned_data: Dict[str, Any],
+    ) -> Tuple[bool, Optional[Dict[str, Any]]]:
+        """Validates using JSON schema"""
+
+        try:
+            self.schema_validator.validate(cleaned_data)
+            return True, None
+
+        except ValidationError as validation_error:
+            validation_errors: List[Any] = []
+
+            validation_error.append(f"Schema validation failed: {validation_error.message}")
+
+            if validation_error.absolute_path:
+                field_path = ".".join(str(p) for p in validation_error.absolute_path)
+                validation_error.append(f"Field path: {field_path}")
+
+            for suberror in validation_error.context:
+                validation_error.append(f"Sub error: {suberror.message}")
+
+            error_dict = {
+                "validation_errors": validation_errors,
+                "schema_validation_error": str(validation_error),
+                "failed_value": validation_error.instance if hasattr(validation_error, "instance") else None,
+            }
+
+            return False, error_dict
+
+        except Exception as general_error:
+            error_dict = {
+                "validation_errors": [f"Validation system error: {general_error!s}"],
+                "validation_system_error": True,
+            }
+            return False, error_dict
+
+    def _validate_basic_requirements(
+        self,
+        cleaned_data: Dict[str, Any],
+    ) -> Tuple[bool, Optional[Dict[str, Any]]]:
+        """Basic validation used during schema generation phase"""
         validation_errors = []
 
         required_fields = ["cleaned_content", "cleaned_title", "language", "page_id"]
+
         for field in required_fields:
             if field not in cleaned_data:
-                validation_errors.append(f"Missing required field: {field}")
+                validation_errors.append(f"Missing required field(s): {field}")
             elif not cleaned_data[field]:
-                validation_errors.append(f"Empty required fields: {field}")
+                validation_errors.append(f"Empty required field(s): {field}")
 
         if "cleaned_content" in cleaned_data:
             content = cleaned_data["cleaned_content"]
-
-            if len(content.strip()) < self.min_content_length:
-                validation_errors.append(f"Content too short: {len(content)}")
-
-        if "language" in cleaned_data:
-            language = cleaned_data["language"]
-            if not re.match(r"^[a-z]{2}$", language):
-                validation_errors.append(f"Invalid language code format: '{language}'")
-
-        if "page_id" in cleaned_data:
-            try:
-                page_id = int(cleaned_data["page_id"])
-                if page_id <= 0:
-                    validation_errors.append(f"Invalid page_id: {page_id}")
-            except (ValueError, TypeError):
-                validation_errors.append(f"page_id must be a positive integer: {cleaned_data['page_id']}")
-
-        if cleaned_data.get("url"):
-            url = cleaned_data["url"]
-            if not url.startswith(("http://", "https://")):
-                validation_errors.append(f"Invalid URL format: {url}")
-            if "wikipedia.org" not in url:
-                validation_errors.append(f"URL is not from Wikipedia: {url}")
-
-        if "category_count" in cleaned_data:
-            category_count = cleaned_data["category_count"]
-            if category_count > 100:
-                validation_errors.append(f"Unusally high category count: {category_count}")
-
-        if "internal_link_count" in cleaned_data:
-            link_count = cleaned_data["internal_link_count"]
-            if link_count > 1000:
-                validation_errors.append(f"Unusually high internal link count: {link_count}")
+            if len(content.strip() < self.min_content_length):
+                validation_errors.append(f"Content too short: {len(content)} char")
 
         is_valid = len(validation_errors) == 0
         error_dict = {"validation_errors": validation_errors} if validation_errors else None
