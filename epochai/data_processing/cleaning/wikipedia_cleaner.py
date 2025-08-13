@@ -367,3 +367,34 @@ class WikipediaCleaner(BaseCleaner):
 
         raw_data_ids = [record.id for record in raw_data_records if record.id]
         return self.clean_multiple_records(raw_data_ids)
+
+    def reload_schema_from_database(self) -> bool:
+        """Reload schema from database (call this when it changes externally)"""
+        try:
+            old_schema_id = self.metadata_schema_id
+            self.metadata_schema_cache = None
+            self.schema_validator = None
+            self.metadata_schema_id = None
+
+            self._load_schema_from_database()
+
+            if self.metadata_schema_id != old_schema_id:
+                self.logger.info(f"Schema reloaded: {old_schema_id} -> {self.metadata_schema_id}")
+                return True
+            return False
+
+        except Exception as general_error:
+            self.logger.error(f"Error reloading schema: {general_error}")
+            return False
+
+    def get_schema_info(self) -> Dict[str, Any]:
+        """Gets info about the current schema"""
+        return {
+            "schema_cached": self.metadata_schema_cache is not None,
+            "schema_id": self.metadata_schema_id,
+            "validator_available": self.schema_validator is not None,
+            "temp_schemas_count": len(self.temp_schemas),
+            "cleaner_name": self.cleaner_name,
+            "cleaner_version": self.cleaner_version,
+            "using_json_schema_validation": self.schema_validator is not None,
+        }
