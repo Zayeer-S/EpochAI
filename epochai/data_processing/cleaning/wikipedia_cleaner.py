@@ -19,6 +19,7 @@ class WikipediaCleaner(BaseCleaner):
         self.metadata_schema_cache: Optional[Dict[str, Any]] = None
         self.schema_validator: Optional[jsonschema.protocols.Validator] = None
         self.schema_generation_count: int = 0
+        self.records_processed_count: int = 0
         self.temp_schemas: List[Dict[str, Any]] = []
         self.metadata_schema_id: Optional[int] = None
 
@@ -29,6 +30,9 @@ class WikipediaCleaner(BaseCleaner):
         self._multiple_newlines_pattern = re.compile(r"\n{3,}")
 
         self.schema_cache_limit = int(self.config.get("cleaners").get("wikipedia").get("schema_cache_limit"))
+        self.schema_check_interval = int(
+            self.config.get("cleaners").get("wikipedia").get("schema_check_interval"),
+        )
 
         self._load_schema_from_database()
 
@@ -139,6 +143,35 @@ class WikipediaCleaner(BaseCleaner):
             self.logger.error(f"Error caching schema to database: {general_error}")
             return None
 
+    def _check_for_schema_updates(self) -> bool:
+        """Checks if schema has been updated in database and reloads if necessary"""
+        try:
+            current_schema_id = self.metadata_schema_id
+            all_schemas = self.cleaned_data_metadata_schema_dao.get_all()
+
+            for each_schema in all_schemas:
+                schema_content = each_schema.metadata_schema
+                if (
+                    isinstance(schema_content, Dict)
+                    and schema_content.get("cleaner_name") == self.cleaner_name
+                    and schema_content.get("cleaner_version") == self.cleaner_version
+                    and each_schema.id != current_schema_id
+                ):
+                    self.logger.info(f"Found updated schema (id: {each_schema.id}), reloading...")
+
+                    self.metadata_schema_id = each_schema.id
+                    self.metadata_schema_cache = schema_content
+                    self._create_validator_using_schema(schema_content)
+
+                    self.logger.info(f"Schema updated: {current_schema_id} -> {each_schema.id}")
+                    return True
+
+            return False
+
+        except Exception as general_error:
+            self.logger.error(f"Error checking for schema updates: {general_error}")
+            return False
+
     def get_metadata_schema_id(self) -> Optional[int]:
         if self.metadata_schema_id is None:
             self.logger.error("No metadata schema id available - check schema generation logs")
@@ -154,6 +187,15 @@ class WikipediaCleaner(BaseCleaner):
 
         if not raw_data.metadata:
             raise ValueError(f"Raw data ({raw_data.id}) has no metadata to clean")
+
+        self.records_processed_count += 1
+        if self.records_processed_count % self.schema_check_interval == 0:
+            self.logger.info(
+                f"Checking for schema updates (processed {self.records_processed_count} records)",
+            )
+            schema_updated = self._check_for_schema_updates()
+            if schema_updated:
+                self.logger.info("Schema was updated from the database")
 
         metadata = raw_data.metadata.copy()
 
@@ -397,4 +439,8 @@ class WikipediaCleaner(BaseCleaner):
             "cleaner_name": self.cleaner_name,
             "cleaner_version": self.cleaner_version,
             "using_json_schema_validation": self.schema_validator is not None,
+            "records_processed": self.records_processed_count,
+            "schema_check_interval": self.schema_check_interval,
+            "next_schema_check_at": self.schema_check_interval
+            - (self.records_processed_count % self.schema_check_interval),
         }
