@@ -1,15 +1,10 @@
 from abc import ABC, abstractmethod
-from datetime import datetime
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
-from epochai.common.config.config_loader import ConfigLoader
-from epochai.common.database.dao.cleaned_data_dao import CleanedDataDAO
-from epochai.common.database.dao.cleaned_data_metadata_schemas_dao import CleanedDataMetadataSchemasDAO
-from epochai.common.database.dao.raw_data_dao import RawDataDAO
-from epochai.common.database.dao.validation_statuses_dao import ValidationStatusesDAO
 from epochai.common.database.models import CleanedData, RawData
 from epochai.common.logging_config import get_logger
+from epochai.data_processing.services.cleaning_service import CleaningService
 
 
 class BaseCleaner(ABC):
@@ -22,39 +17,9 @@ class BaseCleaner(ABC):
         self.cleaner_version = cleaner_version
         self.logger = get_logger(__name__)
 
-        self.raw_data_dao = RawDataDAO()
-        self.cleaned_data_dao = CleanedDataDAO()
-        self.cleaned_data_metadata_schema_dao = CleanedDataMetadataSchemasDAO()
-        self.validation_statuses_dao = ValidationStatusesDAO()
-        self.config = ConfigLoader.get_data_config()
-
-        self._validation_status_cache = self._load_validation_statuses()
-
-        self.metadata_schema_id: Optional[int] = None
+        self.service = CleaningService(cleaner_name, cleaner_version)
 
         self.logger.info(f"Initialized {self.cleaner_name} v{self.cleaner_version}")
-
-    def _load_validation_statuses(self) -> Dict[str, int]:
-        """Loads and caches validation status ids"""
-
-        try:
-            statuses = self.validation_statuses_dao.get_all()
-            return {status.validation_status_name: status.id for status in statuses if status.id}
-        except Exception as general_error:
-            self.logger.error(f"Failed to load validation statuses: {general_error}")
-            return {}
-
-    def _get_validation_status_id(
-        self,
-        status_name: str,
-    ) -> Optional[int]:
-        """Gets validation status ID"""
-        status_id = self._validation_status_cache.get(status_name)
-        if status_id is not None:
-            return int(status_id)
-
-        self.logger.warning(f"Validation status '{status_name}' not found")
-        return None
 
     @abstractmethod
     def clean_content(
@@ -68,26 +33,6 @@ class BaseCleaner(ABC):
             Dictionary containing cleaned metadata
         """
         raise NotImplementedError(f"Subclasses must implement {self.clean_content.__name__} method")
-
-    @abstractmethod
-    def validate_cleaned_content(
-        self,
-        cleaned_data: Dict[str, Any],
-    ) -> Tuple[bool, Optional[Dict[str, Any]]]:
-        """
-        Validates cleaned data
-
-        Returns:
-            Tuple of (is_valid, validation_error_dict)
-        """
-        raise NotImplementedError(
-            f"Subclasses must implement {self.validate_cleaned_content.__name__} method",
-        )
-
-    @abstractmethod
-    def get_metadata_schema_id(self) -> Optional[int]:
-        """Gets metadata schema id for this cleaner"""
-        raise NotImplementedError(f"Subclasses must implement {self.get_metadata_schema_id.__name__} method")
 
     def clean_single_record(
         self,
@@ -103,14 +48,16 @@ class BaseCleaner(ABC):
         start_time = time.time()
 
         try:
-            raw_data: Optional[RawData] = self.raw_data_dao.get_by_id(raw_data_id)
+            raw_data: Optional[RawData] = self.service.raw_data_dao.get_by_id(raw_data_id)
             if not raw_data:
                 self.logger.error(f"Raw data with id '{raw_data_id}' not found")
                 return None
 
             self.logger.info(f"Cleaning raw data id '{raw_data_id}': '{raw_data.title}'")
 
-            existing_cleaned: List[CleanedData] = self.cleaned_data_dao.get_by_raw_data_id(raw_data_id)
+            existing_cleaned: List[CleanedData] = self.service.cleaned_data_dao.get_by_raw_data_id(
+                raw_data_id,
+            )
             for cleaned in existing_cleaned:
                 if (
                     cleaned.cleaner_used == self.cleaner_name
@@ -123,38 +70,19 @@ class BaseCleaner(ABC):
 
             cleaned_metadata = self.clean_content(raw_data)
 
-            is_valid, validation_error = self.validate_cleaned_content(cleaned_metadata)
-            validation_status_id: int = self._get_validation_status_id("valid" if is_valid else "invalid")
+            self.service.handle_schema_management(cleaned_metadata)
+
+            is_valid, validation_error = self.service.validate_cleaned_content(cleaned_metadata)
 
             cleaning_time_ms = int((time.time() - start_time) * 1000)
 
-            schema_id = self.get_metadata_schema_id()
-            if not schema_id:
-                self.logger.error(f"No metadata schema id available for {self.cleaner_name}")
-                return None
-
-            cleaned_data_id: Optional[int] = self.cleaned_data_dao.create_cleaned_data(
-                raw_data_id=raw_data.id,
-                cleaned_data_metadata_schema_id=schema_id,
-                title=raw_data.title,
-                language_code=raw_data.language_code,
-                cleaner_used=self.cleaner_name,
-                cleaner_version=self.cleaner_version,
-                cleaning_time_ms=cleaning_time_ms,
-                url=raw_data.url,
-                metadata=cleaned_metadata,
-                validation_status_id=validation_status_id,
+            cleaned_data_id = self.service.save_cleaned_content(
+                raw_data=raw_data,
+                cleaned_metadata=cleaned_metadata,
+                is_valid=is_valid,
                 validation_error=validation_error,
-                cleaned_at=datetime.now(),
+                cleaning_time_ms=cleaning_time_ms,
             )
-
-            if cleaned_data_id:
-                status_msg = "valid" if is_valid else "invalid"
-                self.logger.info(
-                    f"Successfully cleaned raw data {raw_data_id} to cleaned data {cleaned_data_id}. ({status_msg}, {cleaning_time_ms}ms)",  # noqa
-                )
-            else:
-                self.logger.error(f"Failed to save cleaned data for raw data {raw_data_id}")
 
             return cleaned_data_id
 
@@ -162,32 +90,8 @@ class BaseCleaner(ABC):
             cleaning_time_ms = int((time.time() - start_time) * 1000)
             self.logger.error(f"Error cleaning raw data {raw_data_id}: {general_error}")
 
-            try:
-                if "raw_data" in locals() and raw_data:
-                    schema_id = self.get_metadata_schema_id()
-                    if schema_id:
-                        error_dict = {
-                            "error": str(general_error),
-                            "error_type": type(general_error).__name__,
-                            "cleaning_failed": True,
-                        }
-                        self.cleaned_data_dao.create_cleaned_data(
-                            raw_data_id=raw_data.id,
-                            cleaned_data_metadata_schema_id=schema_id,
-                            title=raw_data.title,
-                            language_code=raw_data.language_code,
-                            url=raw_data.url,
-                            metadata={},
-                            validation_status_id=self._get_validation_status_id("invalid"),
-                            validation_error=error_dict,
-                            cleaner_used=self.cleaner_name,
-                            cleaner_version=self.cleaner_version,
-                            cleaning_time_ms=cleaning_time_ms,
-                            cleaned_at=datetime.now(),
-                        )
-
-            except Exception as wtf_error:
-                self.logger.error(f"Failed to save error information: {wtf_error}")
+            if "raw_data" in locals() and raw_data:
+                self.service.save_error_record(raw_data, general_error, cleaning_time_ms)
 
             return None
 
@@ -248,7 +152,9 @@ class BaseCleaner(ABC):
         validation_status: str,
     ) -> Dict[str, Any]:
         """Cleans all raw data records by a specific validation status"""
-        raw_data_records: List[RawData] = self.raw_data_dao.get_by_validation_status(validation_status)
+        raw_data_records: List[RawData] = self.service.raw_data_dao.get_by_validation_status(
+            validation_status,
+        )
         if not raw_data_records:
             self.logger.info(f"No raw data found with validation status '{validation_status}'")
             return {"success_count": 0, "error_count": 0, "cleaned_ids": [], "error_ids": []}
@@ -268,7 +174,7 @@ class BaseCleaner(ABC):
         """
         self.logger.info(f"Cleaning raw data from the last {hours} hours")
 
-        raw_data_records: List[RawData] = self.raw_data_dao.get_recent_contents(hours)
+        raw_data_records: List[RawData] = self.service.raw_data_dao.get_recent_contents(hours)
         if not raw_data_records:
             self.logger.info(f"No raw data found from the last {hours} hours")
             return {"success_count": 0, "error_count": 0, "cleaned_ids": [], "error_ids": []}
@@ -285,7 +191,7 @@ class BaseCleaner(ABC):
         """
 
         try:
-            cleaned_records: List[CleanedData] = self.cleaned_data_dao.get_by_cleaner(
+            cleaned_records: List[CleanedData] = self.service.cleaned_data_dao.get_by_cleaner(
                 self.cleaner_name,
                 self.cleaner_version,
             )
@@ -301,7 +207,7 @@ class BaseCleaner(ABC):
             valid_count = sum(
                 1
                 for record in cleaned_records
-                if record.validation_status_id == self._get_validation_status_id("valid")
+                if record.validation_status_id == self.service.get_validation_status_id("valid")
             )
             invalid_count = len(cleaned_records) - valid_count
 
@@ -328,3 +234,15 @@ class BaseCleaner(ABC):
                 "cleaner_name": self.cleaner_name,
                 "cleaner_version": self.cleaner_version,
             }
+
+    def reload_schema_from_database(self) -> bool:
+        """Reloads schema from database"""
+        return self.service.reload_schema_from_database()
+
+    def get_schema_info(self) -> Dict[str, Any]:
+        """Gets schema info"""
+        return self.service.get_schema_info()
+
+    def get_metadata_schema_id(self) -> Optional[int]:
+        """Gets metadata schema id"""
+        return self.service.get_metadata_schema_id()
