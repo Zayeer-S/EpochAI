@@ -28,7 +28,7 @@ data_settings:
   cleaners:
     wikipedia:
       cleaner_name: "wikipedia_cleaner" # should prolly not change this
-      current_version: 1.0.0 # Lets us control which json schema to use
+      current_version: "1.0.0" # Lets us control which json schema to use
       schema_cache_limit: 3
       schema_check_interval: 5
 
