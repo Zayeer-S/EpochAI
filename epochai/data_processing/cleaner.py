@@ -28,13 +28,12 @@ class Cleaner:
 
         self.logger = get_logger(__name__)
 
-        self.config = ConfigLoader.get_data_config()
-        self.available_cleaners = self._get_available_cleaners(self.config)
+        self.available_cleaners = self._get_available_cleaners()
 
         self.validation_statuses_dao = ValidationStatusesDAO()
         self.validation_status_names = self._get_all_validation_statuses()
 
-        # CONVENIENCE VAR FOR IDE SUPPORT - DO NOT USE IN PROD
+        # CONVENIENCE VAR FOR IDE AUTOCOMPLETE SUPPORT - DO NOT USE IN PROD
         # force_log = self.logger.info("Using convenience var for IDE support")
         # if force_log:
         #    from epochai.data_processing.cleaning.wikipedia_cleaner import WikipediaCleaner
@@ -53,7 +52,7 @@ class Cleaner:
         self.logger.error("Error getting validation status names")
         return []
 
-    def _get_available_cleaners(self, config) -> Dict[str, Any]:
+    def _get_available_cleaners(self) -> Dict[str, Any]:
         """Gets cleaner names without suffix mapped to Class"""
         available_cleaners = {}
 
@@ -90,38 +89,53 @@ class Cleaner:
 
     def _get_id_range(
         self,
-        raw_data_id_range: str,
+        raw_data_id_input: str,
     ) -> List[int]:
         """
         Gets inputed id ranges
 
         Example:
-            User inputs 10-30, this returns 10, 11, 12... 29, 30
+            User inputs "10-30", this returns "10, 11, 12... 29, 30"
+            User input "11", this returns "11"
         """
-        ranges = [r.strip() for r in raw_data_id_range.split(",")]
+        raw_data_id_input = raw_data_id_input.strip()
+
+        if "," not in raw_data_id_input and "-" not in raw_data_id_input:
+            try:
+                return [int(raw_data_id_input)]
+            except ValueError:
+                self.logger.error(f"Invalid single ID: {raw_data_id_input}")
+                return []
 
         id_list: List[int] = []
+        ranges = [r.strip() for r in raw_data_id_input.split(",")]
 
         for range_str in ranges:
-            parts = range_str.split("-")
+            if "-" in range_str:  # it must be a range
+                parts = range_str.split("-")
+                if len(parts) != 2:
+                    self.logger.error(f"Invalid range format: '{range_str}'")
+                    continue
 
-            try:
-                lower_bound = int(parts[0])
-                upper_bound = int(parts[1])
+                try:
+                    lower_bound = int(parts[0])
+                    upper_bound = int(parts[1])
 
-                if upper_bound >= lower_bound:
-                    id_list.extend(range(lower_bound, upper_bound + 1))
-                else:
-                    self.logger.error(
-                        f"Second number in range ({lower_bound}-{upper_bound}) is greater than first. Needs to be other way around.",
-                    )
-            except ValueError as value_error:
-                self.logger.error(f"Invalid numbers in range: '{range_str}' - {value_error}")
-                return []
-            except Exception as general_error:
-                self.logger.error(
-                    f"Unknown error occurred. range_str: {range_str}, lower_bound: {lower_bound}, upper_bound: {upper_bound} - {general_error}",
-                )
+                    if upper_bound >= lower_bound:
+                        id_list.extend(range(lower_bound, upper_bound + 1))
+                    else:
+                        self.logger.error(
+                            f"Second number in range ({lower_bound}-{upper_bound}) must be >= first number",
+                        )
+                except ValueError as value_error:
+                    self.logger.error(f"Invalid numbers in range: '{range_str}' - {value_error}")
+                    return []
+            else:  # its a single number after a range i.e. 5 in input: "1-3, 5"
+                try:
+                    id_list.append(int(range_str))
+                except ValueError:
+                    self.logger.error(f"Invalid ID: '{range_str}'")
+                    return []
 
         return id_list
 
@@ -141,41 +155,17 @@ class Cleaner:
             self.logger.error(f"Failed to initialize {cleaner_type} cleaner: {e}")
             return None
 
-    def clean_single(
+    def clean(
         self,
         cleaner_type: str,
-        raw_data_id: int,
-    ) -> bool:
-        """Cleans a single raw data record"""
-        self.logger.info(f"Cleaning single record {raw_data_id} with {cleaner_type} cleaner")
-
-        try:
-            cleaner = self._get_cleaner(cleaner_type)
-        except CleanerNotFoundError as bruh:
-            self.logger.error(bruh)
-            return False
-
-        try:
-            cleaned_data_id = cleaner.clean_single_record(raw_data_id)
-            if cleaned_data_id:
-                self.logger.info(
-                    f"Successfully cleaned record raw: {raw_data_id} -> cleaned: {cleaned_data_id}",
-                )
-                return True
-            self.logger.error(f"Failed to clean record: {raw_data_id}")
-            return False
-        except Exception as general_error:
-            self.logger.error(f"Error cleaning record {raw_data_id}: {general_error}")
-            return False
-
-    def clean_multiple(
-        self,
-        cleaner_type: str,
-        raw_data_id_range: str,
+        raw_data_id_input: str,
     ) -> Dict[str, Any]:
         """Cleans multiple raw data records"""
+        if len(raw_data_id_input) < 1:
+            self.logger.error("Error, no id's were inserted")
+            return {"success": False, "error": "No id's inserted"}
 
-        id_list = self._get_id_range(raw_data_id_range)
+        id_list = self._get_id_range(raw_data_id_input) if len(raw_data_id_input) > 0 else None
         if not id_list:
             return {"success": False, "error": "No valid ids found"}
 
@@ -342,11 +332,8 @@ def setup_args(
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
         FYI - wikipedia used as example below, replace wikipedia with relevant cleaner name
-        # Clean single
-        python cleaner.py clean-single wikipedia 123
-
-        # Clean multiple
-        python cleaner.py clean-multiple wikipedia 1-10, 15-20
+        # Clean by id
+        python cleaner.py clean-by-id wikipedia 123
 
         # Clean all valid records
         python cleaner.py clean-by-status wikipedia valid
@@ -392,13 +379,9 @@ def setup_args(
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
-    clean_single_parser = subparsers.add_parser('clean-single', help="Cleans a single specified ID")  # fmt: skip
-    clean_single_parser.add_argument('cleaner_type', choices=available_cleaners_keys, help="Type of cleaner to use")  # fmt: skip
-    clean_single_parser.add_argument('raw_data_id', type=int, help="ID of raw data record to clean")  # fmt: skip
-
-    clean_multiple_parser = subparsers.add_parser("clean-multiple", help="Cleans multiple IDs")  # fmt: skip
-    clean_multiple_parser.add_argument('cleaner_type', choices=available_cleaners_keys, help="Type of cleaner to use")  # fmt: skip
-    clean_multiple_parser.add_argument('raw_data_id', type=str, help="ID range of raw data records to clean (e.g. insert '1-3, 5-6')")  # fmt: skip
+    clean_parser = subparsers.add_parser("clean-by-id", help="Cleans a specific ID or an ID range (e.g. '1', '1-3, 5', '1-3, 5-8')")  # fmt: skip
+    clean_parser.add_argument("cleaner_type", choices=available_cleaners_keys, help="Type of cleaner to use")  # fmt: skip
+    clean_parser.add_argument("input_id", type=str, help="Specific ID or range of IDs to clean")  # fmt: skip
 
     clean_by_status_parser = subparsers.add_parser('clean-by-status', help="Clean all IDs with specific validation status")  # fmt: skip
     clean_by_status_parser.add_argument("cleaner_type", choices=available_cleaners_keys, help="Type of cleaner to use")  # fmt: skip
@@ -449,13 +432,13 @@ def main():
     success = True
 
     try:
-        if args.command == "clean-single":
-            success = cli.clean_single(args.cleaner_type, args.raw_data_id)
-            result = {"success": success, "cleaned_id": args.raw_data_id if success else None}
-
-        elif args.command == "clean-multiple":
-            result = cli.clean_multiple(args.cleaner_type, args.raw_data_id)
-            success = result.get("success_count", 0) > 0
+        if args.command == "clean-by-id":
+            result = cli.clean(args.cleaner_type, args.input_id)
+            success = (
+                result.get("success_count", 0) > 0
+                if "success_count" in result
+                else result.get("success", False)
+            )
 
         elif args.command == "clean-by-status":
             result = cli.clean_by_status(args.cleaner_type, args.validation_status)
