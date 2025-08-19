@@ -35,7 +35,7 @@ class Cleaner:
 
         # CONVENIENCE VAR FOR IDE AUTOCOMPLETE SUPPORT - DO NOT USE IN PROD
         # force_log = self.logger.info("Using convenience var for IDE support")
-        # if force_log:
+        # if force_log: """This line should never execute"""
         #    from epochai.data_processing.cleaning.wikipedia_cleaner import WikipediaCleaner
         #    self.convenience_available_cleaners= {
         #        "wikipedia": WikipediaCleaner,
