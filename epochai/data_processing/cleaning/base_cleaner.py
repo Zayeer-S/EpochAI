@@ -114,7 +114,7 @@ class BaseCleaner(ABC):
         start_time = time.time()
 
         success_count = 0
-        error_count = 0
+        complete_fail_count = 0
         cleaned_ids = []
         error_ids = []
 
@@ -125,22 +125,22 @@ class BaseCleaner(ABC):
                     success_count += 1
                     cleaned_ids.append(cleaned_id)
                 else:
-                    error_count += 1
+                    complete_fail_count += 1
                     error_ids.append(raw_data_id)
 
             except Exception as general_error:
                 self.logger.error(f"Unexpected error cleaning raw data {raw_data_id}: {general_error}")
-                error_count += 1
+                complete_fail_count += 1
                 error_ids.append(raw_data_id)
 
         total_time = time.time() - start_time
         self.logger.info(
-            f"Batch cleaning completed: {success_count} successful, {error_count} failed - {total_time}s total, {total_time / len(raw_data_ids) if raw_data_ids else 0}s avg per record",  # noqa
+            f"Batch cleaning completed: {success_count} cleaned with/without errors, {complete_fail_count} failed completely - {total_time}s total, {total_time / len(raw_data_ids) if raw_data_ids else 0}s avg per record",  # noqa
         )
 
         return {
             "success_count": success_count,
-            "error_count": error_count,
+            "error_count": complete_fail_count,
             "cleaned_ids": cleaned_ids,
             "error_ids": error_ids,
             "total_time_seconds": total_time,
