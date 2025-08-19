@@ -188,6 +188,8 @@ def upgrade():
         cleaning_time_ms INTEGER NOT NULL,
         cleaned_at TIMESTAMP WITH TIME ZONE NOT NULL,
         created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+
+        CONSTRAINT uk_cleaned_data_raw_cleaner_version UNIQUE (cleaner_used, cleaner_version, raw_data_id)
     );
     """)
 
