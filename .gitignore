@@ -37,3 +37,7 @@ vscode/
 # Migrations
 epochai/common/database/migrations/versions/*
 !epochai/common/database/migrations/versions/001_initial_schema.py
+
+# Feature extractor
+epochai/data_processing/feature_extractor/*
+!epochai/data_processing/feature_extractor/__init__.py
