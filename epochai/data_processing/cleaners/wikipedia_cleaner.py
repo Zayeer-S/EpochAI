@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Optional
 
 from epochai.common.config.config_loader import ConfigLoader
 from epochai.common.database.models import RawData
-from epochai.data_processing.cleaning.base_cleaner import BaseCleaner
+from epochai.data_processing.cleaners.base_cleaner import BaseCleaner
 
 
 class WikipediaCleaner(BaseCleaner):
