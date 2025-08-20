@@ -12,6 +12,33 @@ class CleanedDataDAO:
         self.db = get_database()
         self.logger = get_logger(__name__)
 
+    def check_if_already_cleaned_for_version(
+        self,
+        raw_data_id: int,
+        cleaner_used: str,
+        cleaner_version: str,
+    ) -> Optional[CleanedData]:
+        """Checks if raw data was already cleaned for a specific version of a specific cleaner"""
+
+        query = """
+            SELECT * FROM cleaned_data
+            WHERE raw_data_id = %s,
+            AND cleaner_used = %s,
+            AND cleaner_version = %s
+            LIMIT 1
+        """
+
+        params = (raw_data_id, cleaner_used, cleaner_version)
+
+        try:
+            results = self.db.execute_select_query(query, params)
+            if results:
+                return CleanedData.from_dict(results[0])
+            return None
+        except Exception as general_error:
+            self.logger.error(f"Error checking if already cleaned: {general_error}")
+            return None
+
     def create_cleaned_data(
         self,
         raw_data_id: int,
@@ -44,6 +71,13 @@ class CleanedDataDAO:
         """
 
         try:
+            existing = self.check_if_already_cleaned_for_version(raw_data_id, cleaner_used, cleaner_version)
+            if existing:
+                self.logger.warning(
+                    f"Raw data id {raw_data_id} already cleaned by {cleaner_used} v{cleaner_version} (existing cleaned data id: {existing.id})",  # noqa
+                )
+                return existing.id
+
             current_timestamp = datetime.now()
             cleaned_at_timestamp = cleaned_at if cleaned_at else current_timestamp
             validation_error_json = json.dumps(validation_error) if validation_error else None
