@@ -25,6 +25,13 @@ data_settings:
     ]
     required_fields_wikipedia: ['title', 'content', 'url', 'language', 'collected_at']
 
+  cleaners:
+    wikipedia:
+      cleaner_name: "wikipedia_cleaner" # should prolly not change this
+      current_version: "1.0.0" # Lets us control which json schema to use
+      schema_cache_limit: 3
+      schema_check_interval: 5
+
 # Default setup for collectors
 defaults:
   wikipedia:
