@@ -24,7 +24,7 @@ class DataUtils:
             raise ImportError(f"Error importing modules: {import_error}") from import_error
 
         except Exception as general_error:
-            self.logger.error(f"General Error: {general_error}")
+            raise Exception(f"General Error: {general_error}") from Exception
 
     def _get_save_variables(
         self,
