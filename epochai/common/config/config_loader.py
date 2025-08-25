@@ -108,15 +108,19 @@ class ConfigLoader:
         Returns:
             Merged config (default config settings overriden by override config)
         """
-        defaults = config.get("defaults").get(config_name)
-        if defaults is None:
-            raise ValueError(f"No 'defaults' section found in config for '{config_name}'")
+        all_defaults = config.get("defaults")
+        if all_defaults is None:
+            raise ValueError("No 'defaults' section found in config for any collector")
+
+        relevant_default = all_defaults.get(config_name)
+        if relevant_default is None:
+            raise ValueError(f"No 'defaults' section found in config for {config_name}")
 
         main_config = config.get(config_name)
         if main_config is None:
             raise ValueError(f"No '{config_name}' section found in config")
 
-        merged_config = ConfigLoader.override_default_config_values(defaults, main_config)
+        merged_config = ConfigLoader.override_default_config_values(relevant_default, main_config)
         return merged_config
 
     @staticmethod

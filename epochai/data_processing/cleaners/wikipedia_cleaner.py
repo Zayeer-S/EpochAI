@@ -17,9 +17,9 @@ class WikipediaCleaner(BaseCleaner):
         )
 
         # FALL BACK CLEANING PROCESS VARS
-        self._multiple_whitespace_pattern = re.compile(r"\s+")
+        self._multiple_whitespace_pattern = re.compile(r"[ \t]+")
         self._citation_pattern = re.compile(r"\[\d+\]|\[citation needed\]|\[clarification needed\]")
-        self._unicode_quotes_pattern = re.compile(r'[""]')
+        self._unicode_quotes_pattern = re.compile(r"[\u201c\u201d\u2018\u2019]")
         self._unicode_dashes_pattern = re.compile(r"[–—]")  # noqa
         self._multiple_newlines_pattern = re.compile(r"\n{3,}")
 
@@ -67,20 +67,21 @@ class WikipediaCleaner(BaseCleaner):
     def _clean_text_content(self, text: str) -> str:
         """Cleans and normalizes text content"""
 
-        if not text:
+        if not text or not isinstance(text, str):
             return ""
 
         text = self._citation_pattern.sub("", text)
-        text = self._unicode_quotes_pattern.sub('"', text)
+        text = re.sub(r"[\u201c\u201d]", '"', text)
+        text = re.sub(r"[\u2018\u2019]", "'", text)
         text = self._unicode_dashes_pattern.sub("-", text)
-        text = self._multiple_whitespace_pattern.sub(" ", text)
         text = self._multiple_newlines_pattern.sub("\n\n", text)
+        text = self._multiple_whitespace_pattern.sub(" ", text)
 
         return text.strip()
 
     def _clean_title(self, title: str) -> str:
         """Cleans and normalizes the title content"""
-        if not title:
+        if not title or not isinstance(title, str):
             return ""
 
         title = self._citation_pattern.sub("", title)
@@ -90,7 +91,7 @@ class WikipediaCleaner(BaseCleaner):
 
     def _clean_categories(self, categories: List) -> List:
         """Cleans and deduplicates categories"""
-        if not categories:
+        if not categories or not isinstance(categories, List):
             return []
 
         cleaned_categories = []
@@ -111,7 +112,7 @@ class WikipediaCleaner(BaseCleaner):
     def _clean_links(self, links: List) -> List:
         """Cleans and deduplicates internal links"""
 
-        if not links:
+        if not links or not isinstance(links, List):
             return []
 
         cleaned_links = []
@@ -153,7 +154,7 @@ class WikipediaCleaner(BaseCleaner):
 
         raw_data_records = self.service.raw_data_dao.get_by_validation_status("valid")
 
-        if limit:
+        if limit is not None and not limit < 0:
             raw_data_records = raw_data_records[:limit]
             self.logger.info(f"Limited batch to {limit} records")
 
