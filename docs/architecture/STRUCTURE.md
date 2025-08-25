@@ -14,7 +14,7 @@ EpochAI/
 │
 ├── .github/
 │   └── workflows/
-│       └── lint.yml                                        # Automated lint via github actions
+│       └── lint.yml                                        # Automated lint and unit tests via github actions
 │
 ├── app/                                                    # Web application
 │   ├── __init__.py
@@ -44,6 +44,7 @@ EpochAI/
 │   ├── diagrams/                                           # Architecture diagrams
 │   │   ├── ERD.drawio.png                                  # File structure in png format
 │   │   ├── ERD.drawio.xml                                  # File structure in xml to allow for future editing
+│   ├── ENV_FILE_TEMPLATE.md
 │   └── USER_GUIDE.md
 │
 ├── notebooks/                                              # Jupyter notebooks
@@ -103,9 +104,13 @@ EpochAI/
 │   │   └── market_collector.py                             # Financial data collection
 │   ├── data_processing/                                    # Data processing modules
 │   │   ├── __init__.py
-│   │   ├── cleaner.py                                      # Data cleaning functions
+│   │   ├── cleaner.py                                      # All cleaners orchestrator and CLI
 │   │   ├── feature_extractor.py                            # Feature extraction
-│   │   └── data_classifier.py                              # Classifying data types
+│   │   ├── data_classifier.py                              # Classifying data types
+│   │   └── cleaners/                                       # Collector Utils
+│   │       ├── __init__.py
+│   │       ├── base_cleaner.py                             # Abstract base cleaner
+│   │       └── wikipedia_cleaner.py                        # Wikipedia cleaner - inherits base_cleaner
 │   ├── politicsai/                                         # PoliticsAI component
 │   │   ├── __init__.py
 │   │   ├── personality_profiler.py
@@ -126,6 +131,14 @@ EpochAI/
 │       └── dashboard.py
 │
 └── tests/                                                  # Unit and integration tests
-    ├── test_data_collection.py
+    ├── conftest.py                                         # Tells Pytest where project filepath is
     ├── test_politicsai.py
-    └── test_stocksai.py
+    │   ├── .gitkeep
+    └── unit_tests.py
+        ├── test_base_cleaner.py
+        ├── test_config_loader.py
+        ├── test_config_validator.py
+        ├── test_data_utils.py
+        ├── test_database.py
+        ├── test_wikipedia_cleaner.py
+        └── test_wikipedia_utils.py
