@@ -36,6 +36,8 @@ class CollectionTargetManager:
     ):
         cls._collector_name = collector_name
 
+    CollectionTargets = Dict[str, Dict[str, Dict[str, int]]]
+
     @classmethod
     def get_collection_targets_from_database(
         cls,
@@ -43,8 +45,17 @@ class CollectionTargetManager:
         collection_type: Optional[str] = None,
         language_code: Optional[str] = None,
         is_collected: Optional[bool] = None,
-    ) -> Dict[str, Any]:
-        """Gets collection targets from database"""
+    ) -> CollectionTargets:
+        """
+        Gets collection targets from database
+
+        Returns:
+            {"collection_type":
+                {"language_code":
+                    {"collection_name": collection_id}
+                }
+            }
+        """
 
         cls._lazy_database_init()
 
@@ -52,8 +63,7 @@ class CollectionTargetManager:
             collector_name = cls._collector_name
 
         if collector_name is None:
-            cls._logger.error("Error, cls._collector_name is null")
-            raise
+            raise ValueError("Error, cls._collector_name is null")
 
         try:
             # Directly get uncollected if we have collection_type and language_code
@@ -88,17 +98,17 @@ class CollectionTargetManager:
 
             grouped_targets: Dict[str, Any] = {}
 
-            for each_target in collection_targets:
-                collection_type_obj = cls._collection_types_dao.get_by_id(each_target.collection_type_id)
+            for target in collection_targets:
+                collection_type_obj = cls._collection_types_dao.get_by_id(target.collection_type_id)
                 type_name = collection_type_obj.collection_type if collection_type_obj else "unknown"
 
                 if type_name not in grouped_targets:
                     grouped_targets[type_name] = {}
 
-                if each_target.language_code not in grouped_targets[type_name]:
-                    grouped_targets[type_name][each_target.language_code] = []
+                if target.language_code not in grouped_targets[type_name]:
+                    grouped_targets[type_name][target.language_code] = {}
 
-                grouped_targets[type_name][each_target.language_code].append(each_target.collection_name)
+                grouped_targets[type_name][target.language_code][target.collection_name] = target.id
 
             cls._logger.info(f"Retrieved {len(collection_targets)} collection targets from database")
             return grouped_targets

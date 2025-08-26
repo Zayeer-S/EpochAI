@@ -138,7 +138,7 @@ class WikipediaUtils:
 
     def process_items_by_language(
         self,
-        items_by_language_code: Dict[str, List[str]],
+        items_by_language_code: Dict[str, Dict[str, int]],
         process_func: Callable,
     ) -> Dict[str, List[Any]]:
         """
@@ -157,8 +157,8 @@ class WikipediaUtils:
 
         results_by_language: Dict[str, List[Any]] = {}
 
-        for language_code, items in items_by_language_code.items():
-            if not items:
+        for language_code, items_dict in items_by_language_code.items():
+            if not items_dict:
                 self.logger.warning(
                     f"No items for this language '{language_code}', skipping this language...",
                 )
@@ -170,16 +170,16 @@ class WikipediaUtils:
 
             results_by_language[language_code] = []
 
-            for item in items:
+            for item_name, target_id in items_dict.items():
                 try:
-                    result = process_func(item, language_code)
+                    result = process_func(item_name, language_code, target_id)
                     if result:
                         results_by_language[language_code].append(result)
 
                     time.sleep(self.config["api"]["rate_limit_delay"])
 
                 except Exception as general_error:
-                    self.logger.error(f"Error processing '{item} in '{language_code}': {general_error}")
+                    self.logger.error(f"Error processing '{item_name} in '{language_code}': {general_error}")
                     continue
 
         return results_by_language
