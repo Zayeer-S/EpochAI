@@ -289,3 +289,36 @@ class CollectionTargetManager:
             if cls._logger:
                 cls._logger.error(f"Database connection test failed: {general_error}")
             return False
+
+    @classmethod
+    def get_list_of_uncollected_types_by_collector_name(
+        cls,
+        collector_name: str,
+        unique_types_only: bool = False,
+    ) -> List[str]:
+        """
+        Gets list of either all or unique, uncollected collection types by the collector's name
+
+        Returns:
+            List: ["collection_type", ...]
+        """
+        try:
+            result = []
+            cls._lazy_database_init()
+
+            uncollected_targets = cls._collection_targets_dao.get_uncollected_by_collector_name(
+                collector_name,
+                unique_types_only=unique_types_only,
+            )
+
+            for uncollected in uncollected_targets:
+                collection_type_obj = cls._collection_types_dao.get_by_id(uncollected.collection_type_id)
+                name_type = collection_type_obj.collection_type if collection_type_obj else "unkown"
+
+                result.append(name_type)
+
+            return result
+
+        except Exception as general_error:
+            cls._logger.error(f"Error searching collection targets for '{collector_name}': {general_error}")
+            return []
