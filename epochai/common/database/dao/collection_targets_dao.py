@@ -415,3 +415,40 @@ class CollectionTargetsDAO:
                 f"Error getting targets for collector '{collector_name}' and type '{collection_type}': {general_error}",  # noqa
             )
             return []
+
+    def get_uncollected_by_collector_name(
+        self,
+        collector_name: str,
+        unique_types_only: bool = False,
+    ) -> List[CollectionTargets]:
+        """Gets uncollected targets by collector name"""
+
+        if unique_types_only:
+            query = """
+                SELECT DISTINCT ON (ct.collection_type_id) ct.*
+                FROM collection_targets cc
+                JOIN collector_names cn ON cc.collector_name_id = cn.id
+                JOIN collection_types ct ON cc.collection_type_id = ct.id
+                WHERE cn.collector_name = %s
+                AND cc.is_collected = FALSE
+                ORDER BY ct.collection_type_id, cc.created_at ASC
+            """
+        else:
+            query = """
+                SELECT cc.*
+                FROM collection_targets cc
+                JOIN collector_names cn ON cc.collector_name_id = cn.id
+                WHERE cn.collector_name = %s
+                AND cc.is_collected = FALSE
+                ORDER BY cc.language_code, cc.created_at ASC
+            """
+
+        try:
+            results = self.db.execute_select_query(query, (collector_name,))
+            return [CollectionTargets.from_dict(row) for row in results]
+
+        except Exception as general_error:
+            self.logger.error(
+                f"Error getting uncollected targets for collector '{collector_name}': {general_error}",
+            )
+            return []
