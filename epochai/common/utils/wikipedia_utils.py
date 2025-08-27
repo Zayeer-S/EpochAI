@@ -146,8 +146,16 @@ class WikipediaUtils:
         Uses process_func to call a relevant function.
 
         Args:
-            process_func: Function that is called for each item. Must accept 2 parameters:
-                (item: str, language_code: str) and returns result or None
+            items_by_language_code:
+                {"language_code":
+                    {"first_collection_name": id_of_first_collection_name},
+                    {"second_collection_name": id_of_second_collection_name}
+                }
+            process_func: Function that is called for each item. Must accept 3 parameters:
+                (item: str,
+                language_code: str,
+                collection_target_id: int,
+                ) -> result or None
 
         Returns:
             Dict mapping language codes to a nullable list
@@ -170,9 +178,9 @@ class WikipediaUtils:
 
             results_by_language[language_code] = []
 
-            for item_name, target_id in items_dict.items():
+            for item_name, collection_target_id in items_dict.items():
                 try:
-                    result = process_func(item_name, language_code, target_id)
+                    result = process_func(item_name, language_code, collection_target_id)
                     if result:
                         results_by_language[language_code].append(result)
 

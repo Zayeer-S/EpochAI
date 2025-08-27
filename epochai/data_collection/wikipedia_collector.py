@@ -19,13 +19,23 @@ class WikipediaCollector(BaseCollector):
             saver_class=WikipediaSaver(),
         )
 
-    def _collect_each_page_metadata(
+    def collect_each_page_metadata(
         self,
         collection_name: str,
         language_code: str,
         collection_target_id: int,
     ) -> Optional[Dict[str, Any]]:
-        """Gets metadata for only one page and saves it (if incrementally saving)"""
+        """
+        Gets metadata for only one page and saves it (if incrementally saving)
+
+        Args:
+            collection_name: Collection name / title of Wikipedia page
+            language_code: Language code of the collection_name
+            collection_target_id: PK of collection_target
+
+        Returns:
+            Optional[Dict[str, Any]]: Page metadata or None
+        """
         self.logger.info(f"Collecting ({language_code}): {collection_name}")
 
         self.current_collection_name = collection_name
@@ -52,22 +62,39 @@ class WikipediaCollector(BaseCollector):
 
     def _collect_and_save(
         self,
-        items_by_language: Dict[str, Dict[str, int]],
+        items_by_language_code: Dict[str, Dict[str, int]],
         collection_type: str,
     ) -> List[Dict[str, Any]]:
-        if not items_by_language:
+        """
+        Collects data and saves (if database saving) via
+        process_items_by_language and collect_each_page_metadata
+
+        Args:
+            items_by_language:
+                {"language_code":
+                    {"first_collection_name": id_of_first_collection_name},
+                    {"second_collection_name": id_of_second_collection_name}
+                }
+            collection_type: The type of collection e.g. "political_topics"
+
+        Returns:
+            Dict mapping language codes to a nullable list
+            e.g.'language_code': [item1, item2, etc]
+                'language_code': [null]
+        """
+        if not items_by_language_code:
             self.logger.warning(f"No items provided for {collection_type}")
             return []
 
         self.logger.info(
-            f"Collecting {collection_type} for {len(items_by_language)} items across {len(items_by_language.keys())} languages",  # noqa
+            f"Collecting {collection_type} for {len(items_by_language_code)} items across {len(items_by_language_code.keys())} languages",  # noqa
         )
 
         self.current_collection_type = collection_type
 
         results_by_language = self.utils.process_items_by_language(
-            items_by_language,
-            self._collect_each_page_metadata,
+            items_by_language_code,
+            self.collect_each_page_metadata,
         )
 
         all_collected_data = []

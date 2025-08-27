@@ -25,7 +25,11 @@ class BaseCollector(ABC):
             self.config = config
             self.utils = utils_class
             self.saver = saver_class
-            self.coll_targets = CollectionTargetManager()  # Pass it here because its common
+            if collection_targets_class is None:
+                self.logger.debug("Using default value for self.coll_targets")
+                self.coll_targets = CollectionTargetManager()
+            else:
+                self.coll_targets = collection_targets_class
 
             # MISC
             self.current_language_code: str
@@ -67,7 +71,7 @@ class BaseCollector(ABC):
         metadata: Dict[str, Any],
         collection_target_id: int,
     ) -> None:
-        """Adds a single item with its collection_config_id to the batch"""
+        """Appends metadata and collection_target_id of the just collected collection to current_batch"""
         if not self.save_to_database:
             self.collected_data.append(metadata)  # Still append to attempt local save
             return
@@ -81,7 +85,7 @@ class BaseCollector(ABC):
             self._save_current_batch()
 
     def _save_current_batch(self) -> None:
-        """Saves current batch if needed and resets current_batch var"""
+        """Saves current batch whenever this function is called and resets current_batch var"""
         if not self.current_batch:
             self.logger.error("No current_batch var")
             return
@@ -124,6 +128,15 @@ class BaseCollector(ABC):
         self,
         collection_type: str,
     ) -> List[Dict[str, Any]]:
+        """
+        Carries out checks on config of collection_type parameter and
+        passes whole config of collection_type to a helper function
+
+        Returns:
+            Dict mapping language codes to a nullable list
+            e.g.'language_code': [item1, item2, etc]
+                'language_code': [null]
+        """
         config_section = self.config.get(collection_type)
         if not config_section:
             self.logger.warning(f"No valid configs found for '{collection_type}', skipping...")
