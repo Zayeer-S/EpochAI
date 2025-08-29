@@ -128,9 +128,6 @@ class CollectionTargetsDAO:
     ) -> List[CollectionTargets]:
         """
         Gets uncollected targets by their collection type and language
-
-        Note:
-            I'm sorry to whoever sees this in the future for making the function name so long
         """
 
         query = """
@@ -153,6 +150,42 @@ class CollectionTargetsDAO:
         except Exception as general_error:
             self.logger.error(
                 f"Error getting uncollected {collection_types} in type '{collection_types}' targets for language code '{language_code}': {general_error}",  # noqa
+            )
+            return []
+
+    def get_uncollected_language_codes_by_collector_name(
+        self,
+        collector_name: str,
+        unique_languages_only: bool,
+    ) -> List[CollectionTargets]:
+        """Gets uncollected targets by their language code"""
+
+        if unique_languages_only:
+            query = """
+                SELECT DISTINCT ON (cc.language_code) cc.*
+                FROM collection_targets
+                JOIN collector_names cn ON cc.collector_name_id = cn.id
+                WHERE cn.collector_name = %s
+                AND cc.is_collected = FALSE
+                ORDER BY cc.language_code, cc.created_at ASC
+            """
+        else:
+            query = """
+                SELECT cc.*
+                FROM collection_targets cc
+                JOIN collector_names cn ON cc.collector_name_id = cn.id
+                WHERE cn.collector_name = %s
+                AND cc.is_collected = FALSE
+                ORDER BY cc.language_code, cc.created_at ASC
+            """
+
+        try:
+            results = self.db.execute_select_query(query, (collector_name,))
+            return [CollectionTargets.from_dict(row) for row in results]
+
+        except Exception as general_error:
+            self.logger.error(
+                f"Error getting uncollected targets for collector '{collector_name}': {general_error}",
             )
             return []
 
@@ -419,7 +452,7 @@ class CollectionTargetsDAO:
     def get_uncollected_by_collector_name(
         self,
         collector_name: str,
-        unique_types_only: bool = False,
+        unique_types_only: bool,
     ) -> List[CollectionTargets]:
         """Gets uncollected targets by collector name"""
 
