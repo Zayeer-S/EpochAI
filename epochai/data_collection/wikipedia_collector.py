@@ -10,12 +10,12 @@ class WikipediaCollector(BaseCollector):
     def __init__(
         self,
     ):
-        self.config = ConfigLoader.get_wikipedia_config()
+        self.yaml_config = ConfigLoader.get_wikipedia_yaml_config()
 
         super().__init__(
-            collector_name=self.config.get("api").get("collector_name"),
-            config=self.config,
-            utils_class=WikipediaUtils(self.config),
+            collector_name=self.yaml_config.get("api").get("collector_name"),
+            yaml_config=self.yaml_config,
+            utils_class=WikipediaUtils(self.yaml_config),
             saver_class=WikipediaSaver(),
         )
 

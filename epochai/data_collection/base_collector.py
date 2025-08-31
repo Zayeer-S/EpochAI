@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from epochai.common.config.config_loader import ConfigLoader
 from epochai.common.database.collection_targets_manager import CollectionTargetManager
@@ -10,7 +10,7 @@ class BaseCollector(ABC):
     def __init__(
         self,
         collector_name: str,
-        config: Dict[str, Any],
+        yaml_config: Dict[str, Any],
         utils_class: Any = None,
         saver_class: Any = None,
         collection_targets_class: Any = None,
@@ -22,14 +22,14 @@ class BaseCollector(ABC):
 
             # PARAMETERS
             self.collector_name = collector_name
-            self.config = config
+            self.config = yaml_config
             self.utils = utils_class
             self.saver = saver_class
             if collection_targets_class is None:
                 self.logger.debug("Using default value for self.coll_targets")
                 self.coll_targets = CollectionTargetManager()
             else:
-                self.coll_targets = collection_targets_class
+                self.coll_targets = collection_targets_class()
 
             # MISC
             self.current_language_code: str
@@ -56,6 +56,24 @@ class BaseCollector(ABC):
 
         except Exception as general_error:
             raise Exception(f"Error during initalization: {general_error}") from general_error
+
+    def _get_available_collection_types(
+        self,
+        collector_name: str,
+        collection_status: str,
+    ) -> List[str]:
+        """Gets a list of collection types that have uncollected data in the passed-in collector_name"""
+        try:
+            return self.coll_targets.get_list_of_uncollected_types_by_collector_name(
+                collector_name=collector_name,
+                unique_types_only=True,
+                collection_status=collection_status,
+            )
+        except Exception as general_error:
+            self.logger.error(
+                f"Error getting uncollected collection types for {collector_name}: {general_error}",
+            )
+            return []
 
     def _get_clean_capitalised_name(self, name_to_clean: str) -> str:
         """Cleans name by removing '_' if present and returning the first word capitalized, otherwise just capitalises"""  # noqa: E501
@@ -126,7 +144,8 @@ class BaseCollector(ABC):
 
     def _prep_for_collection(
         self,
-        collection_type: str,
+        collection_type: Optional[str] = None,
+        language_code: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Carries out checks on config of collection_type parameter and
@@ -139,46 +158,77 @@ class BaseCollector(ABC):
         """
         config_section = self.config.get(collection_type)
         if not config_section:
-            self.logger.warning(f"No valid configs found for '{collection_type}', skipping...")
+            self.logger.warning(f"No config found for '{collection_type}', skipping...")
             return []
 
         has_items = any(items for items in config_section.values() if isinstance(items, list) and items)
         if not has_items:
-            self.logger.warning(f"No items found in config for '{collection_type}', skipping...")
+            self.logger.warning(f"No data found in config for '{collection_type}', skipping...")
             return []
-
-        neat_name = self._get_clean_capitalised_name(collection_type)
 
         self.logger.info(
             "=" * 30,
-            f"Starting Collection for {neat_name}",
+            f"Starting Collection for {self._get_clean_capitalised_name(collection_type)}",
             "=" * 30,
         )
 
-        return self._collect_and_save(
-            self.config[f"{collection_type}"],
-            collection_type,
-        )
+        if collection_type and language_code:
+            try:
+                if language_code not in self.config[collection_type]:
+                    self.logger.warning(f"No '{language_code}' data available for '{collection_type}'")
+                    return []
+                return self._collect_and_save(
+                    self.config[str(collection_type)][str(language_code)],
+                    collection_type,
+                )
+            except KeyError:
+                self.logger.warning(
+                    f"Config missing for '{collection_type}' or '{language_code}', skipping...",
+                )
+                return []
 
-    def collect_data(self) -> List[Dict[str, Any]]:
+        elif collection_type:
+            return self._collect_and_save(
+                self.config[collection_type],
+                collection_type,
+            )
+
+        else:
+            self.logger.error("Neither collection type nor language code were passed in")
+            return []
+
+    def collect_data(
+        self,
+        collection_status: str,
+        collection_types: Optional[List[str]] = None,
+        target_ids: Optional[List[int]] = None,
+        language_codes: Optional[List[str]] = None,
+    ) -> List[Dict[str, Any]]:
         """Orchestrates data collection and returns the collection via helper methods"""
-        neat_name = self._get_clean_capitalised_name(self.collector_name)
+        neat_name, result = self._get_clean_capitalised_name(self.collector_name), []
+
+        target_config = self.coll_targets.get_wikipedia_target_config(
+            collector_name=self.collector_name,
+            collection_status=collection_status,
+            collection_types=collection_types,
+            target_ids=target_ids,
+            language_codes=language_codes,
+        )
 
         self.logger.info(f"=== Starting {neat_name} Data Collection ===")
 
-        target_types = self.coll_targets.get_list_of_uncollected_types_by_collector_name(
-            self.collector_name,
-            unique_types_only=True,
-        )
+        for collection_type, language_data in target_config.items():
+            if collection_type == "_database_info":  # Skip metadata
+                continue
 
-        all_data = []
-        for type in target_types:
-            this_loops_collection = self._prep_for_collection(type)
-            all_data.extend(this_loops_collection)
+            this_loops_collection = self._collect_and_save(
+                language_data,  # This is {"language_code": {"collection_name": target_id}}
+                collection_type,
+            )
+            result.extend(this_loops_collection)
 
         self.logger.info("=== Collection Complete :) ===")
-
-        return all_data
+        return result
 
     @abstractmethod
     def _collect_and_save(
