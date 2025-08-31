@@ -178,9 +178,9 @@ class ConfigLoader:
 
         return logging_config
 
-    @staticmethod
+    """@staticmethod
     def get_all_collector_configs() -> Dict[str, Any]:
-        """Gets all collector configs"""
+        Gets all collector configs
 
         all_configs = {}
 
@@ -197,27 +197,35 @@ class ConfigLoader:
             print(f"Could not load wikipedia collector: '{e}'")
             all_configs["wikipedia"] = None
 
-        return all_configs
+        return all_configs"""
 
-    @staticmethod
-    def get_wikipedia_config() -> Dict[str, Any]:
-        """Gets whole Wikipedia Config (combination of YAML + DB) and returns it"""
-        wikipedia_yaml_config = ConfigLoader.get_wikipedia_yaml_config()
-        collector_name = wikipedia_yaml_config["api"]["collector_name"]
+    """@staticmethod
+    def get_wikipedia_config(
+        collector_name: str,
+        collection_types: Optional[List[str]],
+        language_codes: Optional[List[str]],
+        target_ids: Optional[List[int]],
+    ) -> Dict[str, Any]:
+        ""Gets whole Wikipedia Config (combination of YAML + DB) and returns it""
+        yaml_config = ConfigLoader.get_wikipedia_yaml_config()
 
         from epochai.common.database.collection_targets_manager import CollectionTargetManager
 
         result: Dict[str, Any] = CollectionTargetManager.get_combined_wikipedia_target_config(
+            yaml_config=yaml_config,
             collector_name=collector_name,
+            collection_type=collection_types,
+            language_code=language_codes,
+            target_id=target_ids,
         )
 
-        return result
+        return result"""
 
     @staticmethod
     def get_collection_status_summary() -> Dict[str, Any]:
         """Gets collection status summary"""
         from epochai.common.database.collection_targets_manager import CollectionTargetManager
 
-        result: Dict[str, Any] = CollectionTargetManager.get_collection_status_summary()
+        result: Dict[str, Any] = CollectionTargetManager.get_collection_status_summary()  # type: ignore
 
         return result
