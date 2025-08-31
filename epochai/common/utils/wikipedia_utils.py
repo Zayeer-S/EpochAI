@@ -14,7 +14,7 @@ class WikipediaUtils:
         self,
         config,
     ):
-        self.config = config
+        self.yaml_config = config
         self.logger = get_logger(__name__)
 
         self.current_language = None
@@ -38,7 +38,7 @@ class WikipediaUtils:
             self.logger.warning(f"No search results found for '{page_title}'")
             return None
 
-        max_results = self.config["api"]["search_max_results"]
+        max_results = self.yaml_config["api"]["search_max_results"]
 
         attempted_search_results = set()
 
@@ -92,7 +92,7 @@ class WikipediaUtils:
             List of pages title from search results
         """
 
-        search_max_results = self.config["api"]["search_max_results"]
+        search_max_results = self.yaml_config["api"]["search_max_results"]
 
         if not self.switch_language(language_code):
             return []  # no error log here as switch_language will log it itself
@@ -184,7 +184,7 @@ class WikipediaUtils:
                     if result:
                         results_by_language[language_code].append(result)
 
-                    time.sleep(self.config["api"]["rate_limit_delay"])
+                    time.sleep(self.yaml_config["api"]["rate_limit_delay"])
 
                 except Exception as general_error:
                     self.logger.error(f"Error processing '{item_name} in '{language_code}': {general_error}")
@@ -202,11 +202,11 @@ class WikipediaUtils:
         """
         Handles disambiguation errors by trying different options
         """
-        max_retries = int(self.config["api"]["max_retries"])
-        search_max_results = int(self.config["api"]["search_max_results"])
+        max_retries = int(self.yaml_config["api"]["max_retries"])
+        search_max_results = int(self.yaml_config["api"]["search_max_results"])
 
         if recursive_limit is None:
-            recursive_limit = self.config["api"]["recursive_limit"]
+            recursive_limit = self.yaml_config["api"]["recursive_limit"]
         elif recursive_limit <= 0:
             self.logger.warning(
                 f"Recursive limit reached for '{page_title}' in function {self.handle_any_disambiguation_error.__name__}",  # noqa
@@ -305,8 +305,8 @@ class WikipediaUtils:
         Returns:
             Optional[Dict[str, Any]]: Page meta data or "None" if result is null
         """
-        max_retries = self.config["api"]["max_retries"]
-        rate_limit_delay = self.config["api"]["rate_limit_delay"]
+        max_retries = self.yaml_config["api"]["max_retries"]
+        rate_limit_delay = self.yaml_config["api"]["rate_limit_delay"]
 
         for attempt in range(max_retries):
             try:

@@ -28,7 +28,7 @@ def wiki_utils(mock_config):
 class TestWikipediaUtilsInitialization:
     def test_initialization_with_valid_config(self, mock_config):
         utils = WikipediaUtils(mock_config)
-        assert utils.config == mock_config
+        assert utils.yaml_config == mock_config
         assert utils.current_language is None
 
 
