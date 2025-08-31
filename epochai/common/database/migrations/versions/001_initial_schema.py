@@ -27,6 +27,15 @@ def upgrade():
     """)
 
     op.execute("""
+        CREATE TABLE IF NOT EXISTS collection_statuses (
+            id SERIAL PRIMARY KEY,
+            collection_status_name TEXT NOT NULL UNIQUE,
+            updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+            created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+        );
+    """)
+
+    op.execute("""
         CREATE TABLE IF NOT EXISTS attempt_statuses (
             id SERIAL PRIMARY KEY,
             attempt_status_name TEXT NOT NULL UNIQUE,
@@ -97,7 +106,7 @@ def upgrade():
             collection_type_id INTEGER NOT NULL REFERENCES collection_types(id) ON DELETE RESTRICT,
             language_code TEXT NOT NULL,
             collection_name TEXT NOT NULL,
-            is_collected BOOLEAN NOT NULL DEFAULT FALSE,
+            collection_status_id INTEGER NOT NULL REFERENCES collection_statuses(id) ON DELETE RESTRICT,
             updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
             created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
 
@@ -198,7 +207,7 @@ def upgrade():
         CREATE INDEX IF NOT EXISTS idx_collection_targets_collector_types ON collection_targets(collector_name_id, collection_type_id);
     """)
     op.execute("""
-        CREATE INDEX IF NOT EXISTS idx_collection_targets_is_collected ON collection_targets(is_collected);
+        CREATE INDEX IF NOT EXISTS idx_collection_targets_collection_statuses ON collection_targets(collection_status_id);
     """)
     op.execute("""
         CREATE INDEX IF NOT EXISTS idx_collection_targets_language_code ON collection_targets(language_code);
@@ -272,6 +281,9 @@ def upgrade():
         COMMENT ON TABLE collection_targets IS 'Configuration of what needs to be collected';
     """)
     op.execute("""
+        COMMENT ON TABLE collection_statuses IS 'Lookup table for collection target statuses';
+    """)
+    op.execute("""
         COMMENT ON TABLE collection_attempts IS 'Log of each collection attempt';
     """)
     op.execute("""
@@ -294,9 +306,6 @@ def upgrade():
     """)
 
     # COLUMN COMMENTS
-    op.execute("""
-        COMMENT ON COLUMN collection_targets.is_collected IS 'Whether or not this configuration has beeen successfully collected (True = Collected)';
-    """)
     op.execute("""
         COMMENT ON COLUMN collection_attempts.language_code IS 'Actual language code used during the collection attempt';
     """)
@@ -329,5 +338,6 @@ def downgrade():
     op.execute("DROP TABLE IF EXISTS validation_statuses CASCADE;")
     op.execute("DROP TABLE IF EXISTS error_types CASCADE;")
     op.execute("DROP TABLE IF EXISTS attempt_statuses CASCADE;")
+    op.execute("DROP TABLE IF EXISTS collection_statuses CASCADE;")
     op.execute("DROP TABLE IF EXISTS collection_types CASCADE;")
     op.execute("DROP TABLE IF EXISTS collector_names CASCADE;")
