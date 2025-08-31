@@ -2,9 +2,12 @@ from typing import Any, Dict, List, Optional
 
 from epochai.common.config.config_loader import ConfigLoader
 from epochai.common.database.dao.collection_attempts_dao import CollectionAttemptsDAO
+from epochai.common.database.dao.collection_statuses_dao import CollectionStatusesDAO
 from epochai.common.database.dao.collection_targets_dao import CollectionTargetsDAO
+from epochai.common.database.dao.collection_types_dao import CollectionTypesDAO
 from epochai.common.database.dao.raw_data_dao import RawDataDAO
 from epochai.common.database.dao.raw_data_metadata_schemas_dao import RawDataMetadataSchemasDAO
+from epochai.common.enums import CollectionStatusNames
 from epochai.common.logging_config import get_logger
 from epochai.common.utils.data_utils import DataUtils
 
@@ -24,6 +27,8 @@ class WikipediaSaver:
                 self.collection_attempts_dao = CollectionAttemptsDAO()
                 self.raw_data_dao = RawDataDAO()
                 self.collection_targets_dao = CollectionTargetsDAO()
+                self.collection_statuses_dao = CollectionStatusesDAO()
+                self.collection_types_dao = CollectionTypesDAO()
                 self.metadata_schemas_dao = RawDataMetadataSchemasDAO()
 
                 self.ATTEMPT_STATUS_ID = 1
@@ -165,7 +170,10 @@ class WikipediaSaver:
                 self.logger.error(f"Database error while saving '{title}': {general_error}")
 
         if success_count > 0:
-            mark_as_collected = self.collection_targets_dao.mark_as_collected(collection_target_id)
+            mark_as_collected = self.collection_statuses_dao.update_collection_status(
+                collection_target_id,
+                CollectionStatusNames.COLLECTED.value,
+            )
             if mark_as_collected:
                 self.logger.info(
                     f"Marked target {collection_target_id} as collected after saving {success_count} items",
@@ -194,9 +202,23 @@ class WikipediaSaver:
     ) -> Optional[int]:
         """Gets the collection_target_id for the current collection"""
         try:
-            targets = self.collection_targets_dao.get_uncollected_by_type_and_language(
-                collection_type,
+            status_id = self.collection_statuses_dao.get_id_by_name(CollectionStatusNames.NOT_COLLECTED.value)
+            if not status_id:
+                raise ValueError(
+                    f"Failed to get status_id for type '{collection_type}' and name '{collection_name}' in '{language_code}'",  # noqa: E501
+                )
+
+            type_obj = self.collection_types_dao.get_by_name(collection_type)
+            if not type_obj:
+                raise ValueError(
+                    f"Failed to get collection_type_id for type '{collection_type}' and name '{collection_name}' in '{language_code}'",  # noqa: E501
+                )
+            type_id: int = type_obj.id
+
+            targets = self.collection_targets_dao.get_by_type_and_language(
+                type_id,
                 language_code,
+                status_id,
             )
 
             for target in targets:
