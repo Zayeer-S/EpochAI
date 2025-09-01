@@ -2,7 +2,7 @@ from typing import Any, Dict, List, Optional
 
 from epochai.common.config.config_loader import ConfigLoader
 from epochai.common.utils.wikipedia_utils import WikipediaUtils
-from epochai.data_collection.base_collector import BaseCollector
+from epochai.data_collection.collectors.base_collector import BaseCollector
 from epochai.database_savers.wikipedia_saver import WikipediaSaver
 
 
