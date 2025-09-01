@@ -225,7 +225,7 @@ class CollectorCLI:
             if invalid_languages:
                 errors.append(f"Invalid language codes were input: {invalid_languages}")
 
-        if not target_ids:
+        if target_ids is not None and not target_ids:
             errors.append("Failed to get list of IDs to collect")
 
         return {"success": False, "error": errors} if errors else {"success": True}
