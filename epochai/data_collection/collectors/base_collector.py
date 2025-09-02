@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from epochai.common.config.config_loader import ConfigLoader
 from epochai.common.database.collection_targets_manager import CollectionTargetManager
@@ -88,14 +88,15 @@ class BaseCollector(ABC):
         self,
         metadata: Dict[str, Any],
         collection_target_id: int,
+        language_code: str,
     ) -> None:
-        """Appends metadata and collection_target_id of the just collected collection to current_batch"""
+        """Appends metadata, collection_target_id and language_code of the just collected collection to current_batch"""  # noqa
         if not self.save_to_database:
             self.collected_data.append(metadata)  # Still append to attempt local save
             return
 
         if collection_target_id:
-            self.current_batch.append((metadata, collection_target_id))
+            self.current_batch.append((metadata, collection_target_id, language_code))
         else:
             self.logger.error(f"Error getting collction_target_id '{collection_target_id}'")
 
@@ -108,18 +109,19 @@ class BaseCollector(ABC):
             self.logger.error("No current_batch var")
             return
 
-        items_by_config_id: Dict[int, List[Dict[str, Any]]] = {}
-        for item_data, collection_config_id in self.current_batch:
-            if collection_config_id not in items_by_config_id:
-                items_by_config_id[collection_config_id] = []
-            items_by_config_id[collection_config_id].append(item_data)
+        items_by_id_and_language: Dict[Tuple[int, str], List[Dict[str, Any]]] = {}
+        for item_data, collection_config_id, language_code in self.current_batch:
+            key = (collection_config_id, language_code)
+            if key not in items_by_id_and_language:
+                items_by_id_and_language[key] = []
+            items_by_id_and_language[key].append(item_data)
 
         total_saved_in_batch = 0
-        for collection_config_id, items in items_by_config_id.items():
+        for (collection_config_id, language_code), items in items_by_id_and_language.items():
             success_count = self.saver.save_incrementally_to_database(
                 collected_data=items,
                 collection_target_id=collection_config_id,
-                language_code=self.current_language_code,
+                language_code=language_code,
             )
 
             if success_count >= 0:
@@ -139,7 +141,7 @@ class BaseCollector(ABC):
             )
             return
 
-        self.logger.info(log_msg)
+        self.logger.debug(log_msg)
         self._save_current_batch()
 
     def _prep_for_collection(
