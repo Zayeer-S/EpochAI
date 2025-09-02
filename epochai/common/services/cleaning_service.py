@@ -351,7 +351,7 @@ class CleaningService:
             if cleaned_data_id:
                 status_msg = "valid" if is_valid else "invalid"
                 self.logger.info(
-                    f"Successfully saved cleaned data {cleaned_data_id}. ({status_msg}, {cleaning_time_ms}ms)",  # noqa
+                    f"Successfully saved cleaned data {cleaned_data_id}. ({status_msg}, {cleaning_time_ms}ms)",
                 )
 
             return cleaned_data_id
@@ -428,6 +428,5 @@ class CleaningService:
             "using_json_schema_validation": self.schema_validator is not None,
             "records_processed": self.records_processed_count,
             "schema_check_interval": self.schema_check_interval,
-            "next_schema_check_at": self.schema_check_interval
-            - (self.records_processed_count % self.schema_check_interval),
+            "next_schema_check_at": self.schema_check_interval - (self.records_processed_count % self.schema_check_interval),
         }

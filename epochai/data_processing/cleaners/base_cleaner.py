@@ -4,7 +4,7 @@ from typing import Any, Dict, List, Optional
 
 from epochai.common.database.models import CleanedData, RawData
 from epochai.common.logging_config import get_logger
-from epochai.data_processing.services.cleaning_service import CleaningService
+from epochai.common.services.cleaning_service import CleaningService
 
 
 class BaseCleaner(ABC):
@@ -59,12 +59,9 @@ class BaseCleaner(ABC):
                 raw_data_id,
             )
             for cleaned in existing_cleaned:
-                if (
-                    cleaned.cleaner_used == self.cleaner_name
-                    and cleaned.cleaner_version == self.cleaner_version
-                ):
+                if cleaned.cleaner_used == self.cleaner_name and cleaned.cleaner_version == self.cleaner_version:
                     self.logger.warning(
-                        f"Raw data {raw_data_id} already cleaned by {self.cleaner_name} v{self.cleaner_version}",  # noqa
+                        f"Raw data {raw_data_id} already cleaned by {self.cleaner_name} v{self.cleaner_version}",
                     )
                     return cleaned.id
 
@@ -205,9 +202,7 @@ class BaseCleaner(ABC):
 
             cleaning_times = [record.cleaning_time_ms for record in cleaned_records]
             valid_count = sum(
-                1
-                for record in cleaned_records
-                if record.validation_status_id == self.service.get_validation_status_id("valid")
+                1 for record in cleaned_records if record.validation_status_id == self.service.get_validation_status_id("valid")
             )
             invalid_count = len(cleaned_records) - valid_count
 
