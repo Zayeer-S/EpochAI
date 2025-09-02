@@ -21,12 +21,6 @@ class CollectorCLI:
     """Collectors orchestrator and CLI"""
 
     def __init__(self):
-        log_config = ConfigLoader.get_logging_config()
-        setup_logging(
-            log_level=log_config["level"],
-            log_to_file=log_config["log_to_file"],
-            log_dir=log_config["log_directory"],
-        )
         self.logger = get_logger(__name__)
 
         self.coll_targets = CollectionTargetManager()
