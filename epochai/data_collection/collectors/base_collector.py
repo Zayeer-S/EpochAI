@@ -207,7 +207,7 @@ class BaseCollector(ABC):
         """Orchestrates data collection and returns the collection via helper methods"""
         neat_name, result = self._get_clean_capitalised_name(self.collector_name), []
 
-        target_config = self.coll_targets.get_wikipedia_target_config(
+        target_config = ConfigLoader.get_wikipedia_targets_config(
             collector_name=self.collector_name,
             collection_status=collection_status,
             collection_types=collection_types,

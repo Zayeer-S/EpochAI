@@ -1,7 +1,7 @@
 import contextlib
 import locale
 import os
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
 import yaml
 
@@ -220,6 +220,30 @@ class ConfigLoader:
         )
 
         return result"""
+
+    @staticmethod
+    def get_wikipedia_targets_config(
+        collector_name: str,
+        collection_status: str,
+        collection_types: Optional[List[str]] = None,
+        language_codes: Optional[List[str]] = None,
+        target_ids: Optional[List[int]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Gets Wikipedia collection targets configuration from database
+
+        Note: This is just a convenience method for config access consistency
+        """
+        from epochai.common.database.collection_targets_manager import CollectionTargetManager
+
+        manager = CollectionTargetManager()
+        return manager.get_wikipedia_targets_config(
+            collector_name=collector_name,
+            collection_status=collection_status,
+            collection_types=collection_types,
+            language_codes=language_codes,
+            target_ids=target_ids,
+        )
 
     @staticmethod
     def get_collection_status_summary() -> Dict[str, Any]:
