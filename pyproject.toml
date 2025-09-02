@@ -39,7 +39,7 @@ exclude = [
     "epochai/common/database/migrations/versions/",
 ]
 
-line-length = 110
+line-length = 130
 
 target-version = "py38"
 
