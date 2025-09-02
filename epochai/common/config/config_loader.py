@@ -234,9 +234,9 @@ class ConfigLoader:
 
         Note: This is just a convenience method for config access consistency
         """
-        from epochai.common.services.collection_targets_manager import CollectionTargetsManager
+        from epochai.common.services.collection_targets_query_service import CollectionTargetsQueryService
 
-        service = CollectionTargetsManager()
+        service = CollectionTargetsQueryService()
         return service.get_wikipedia_targets_config(
             collector_name=collector_name,
             collection_status=collection_status,
@@ -244,12 +244,3 @@ class ConfigLoader:
             language_codes=language_codes,
             target_ids=target_ids,
         )
-
-    @staticmethod
-    def get_collection_status_summary() -> Dict[str, Any]:
-        """Gets collection status summary"""
-        from epochai.common.services.collection_targets_manager import CollectionTargetsManager
-
-        result: Dict[str, Any] = CollectionTargetsManager.get_collection_status_summary()  # type: ignore
-
-        return result

@@ -3,7 +3,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from epochai.common.config.config_loader import ConfigLoader
 from epochai.common.logging_config import get_logger
-from epochai.common.services.collection_targets_manager import CollectionTargetsManager
+from epochai.common.services.collection_reports_service import CollectionReportsService
+from epochai.common.services.collection_targets_query_service import CollectionTargetsQueryService
 
 
 class BaseCollector(ABC):
@@ -27,9 +28,12 @@ class BaseCollector(ABC):
             self.saver = saver_class
             if service_class is None:
                 self.logger.debug("Using default value for self.coll_targets")
-                self.service = CollectionTargetsManager()
+                self.service = CollectionTargetsQueryService()
             else:
                 self.service = service_class()
+
+            # HARDCODED SERVICES
+            self.reporter = CollectionReportsService()
 
             # MISC
             self.current_language_code: str
@@ -62,10 +66,10 @@ class BaseCollector(ABC):
     ) -> List[str]:
         """Gets a list of collection types that have uncollected data in the passed-in collector_name"""
         try:
-            return self.service.get_list_of_uncollected_types_by_collector_name(
+            return self.reporter.get_collection_type_list(
                 collector_name=collector_name,
                 unique_types_only=True,
-                collection_status=collection_status,
+                collection_status_name=collection_status,
             )
         except Exception as general_error:
             self.logger.error(
