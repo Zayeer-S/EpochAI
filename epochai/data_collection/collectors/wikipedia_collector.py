@@ -52,7 +52,7 @@ class WikipediaCollector(BaseCollector):
             )
 
             if self.save_to_database:
-                self._add_to_batch(metadata, collection_target_id)
+                self._add_to_batch(metadata, collection_target_id, language_code)
         else:
             self.logger.warning(
                 f"Nothing collected for ({self.current_language_code}): {self.current_collection_name}",
@@ -92,10 +92,14 @@ class WikipediaCollector(BaseCollector):
 
         self.current_collection_type = collection_type
 
-        results_by_language = self.utils.process_items_by_language(
-            items_by_language_code,
-            self.collect_each_page_metadata,
-        )
+        for _lanugage_code, _items_dict in items_by_language_code.items():
+            results_by_language = self.utils.process_items_by_language(
+                items_by_language_code,
+                self.collect_each_page_metadata,
+            )
+
+            if self.save_to_database:
+                self._unconditionally_save_current_batch("Saving in between language change")
 
         all_collected_data = []
         for _language_code, results in results_by_language.items():
