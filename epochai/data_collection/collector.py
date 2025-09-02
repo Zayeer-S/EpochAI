@@ -7,9 +7,9 @@ import sys
 from typing import Any, Dict, List, Optional, Union
 
 from epochai.common.config.config_loader import ConfigLoader
-from epochai.common.database.collection_targets_manager import CollectionTargetManager
 from epochai.common.enums import CollectionStatusNames
 from epochai.common.logging_config import get_logger, setup_logging
+from epochai.common.services.collection_targets_manager import CollectionTargetsManager
 from epochai.data_collection.collectors.base_collector import BaseCollector
 
 
@@ -23,7 +23,7 @@ class CollectorCLI:
     def __init__(self):
         self.logger = get_logger(__name__)
 
-        self.coll_targets = CollectionTargetManager()
+        self.coll_targets = CollectionTargetsManager()
 
         self.available_collectors = self._get_available_collectors()
 
@@ -416,11 +416,7 @@ def main():
 
                     overall_status = result.get("overall_status", {})
                     summary = overall_status.get("summary", {}) if isinstance(overall_status, dict) else {}
-                    by_type_lang = (
-                        overall_status.get("by_type_language_status", [])
-                        if isinstance(overall_status, dict)
-                        else []
-                    )
+                    by_type_lang = overall_status.get("by_type_language_status", []) if isinstance(overall_status, dict) else []
 
                     status_groups: Dict[str, Dict[str, Dict[str, int]]] = {}
                     for item in by_type_lang:

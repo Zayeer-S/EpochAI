@@ -234,10 +234,10 @@ class ConfigLoader:
 
         Note: This is just a convenience method for config access consistency
         """
-        from epochai.common.database.collection_targets_manager import CollectionTargetManager
+        from epochai.common.services.collection_targets_manager import CollectionTargetsManager
 
-        manager = CollectionTargetManager()
-        return manager.get_wikipedia_targets_config(
+        service = CollectionTargetsManager()
+        return service.get_wikipedia_targets_config(
             collector_name=collector_name,
             collection_status=collection_status,
             collection_types=collection_types,
@@ -248,8 +248,8 @@ class ConfigLoader:
     @staticmethod
     def get_collection_status_summary() -> Dict[str, Any]:
         """Gets collection status summary"""
-        from epochai.common.database.collection_targets_manager import CollectionTargetManager
+        from epochai.common.services.collection_targets_manager import CollectionTargetsManager
 
-        result: Dict[str, Any] = CollectionTargetManager.get_collection_status_summary()  # type: ignore
+        result: Dict[str, Any] = CollectionTargetsManager.get_collection_status_summary()  # type: ignore
 
         return result

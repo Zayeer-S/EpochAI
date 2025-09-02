@@ -10,7 +10,7 @@ from epochai.common.enums import CollectionStatusNames
 from epochai.common.logging_config import get_logger
 
 
-class CollectionTargetManager:
+class CollectionTargetsManager:
     def __init__(self):
         self._db_connection = None
         self._collection_targets_dao = None
@@ -209,34 +209,22 @@ class CollectionTargetManager:
             # Calculate stats
             total_targets = len(all_targets)
             collected_count = sum(
-                1
-                for t in all_targets
-                if status_map.get(t.collection_status_id) == CollectionStatusNames.COLLECTED.value
+                1 for t in all_targets if status_map.get(t.collection_status_id) == CollectionStatusNames.COLLECTED.value
             )
             not_collected_count = sum(
-                1
-                for t in all_targets
-                if status_map.get(t.collection_status_id) == CollectionStatusNames.NOT_COLLECTED.value
+                1 for t in all_targets if status_map.get(t.collection_status_id) == CollectionStatusNames.NOT_COLLECTED.value
             )
             in_progress_count = sum(
-                1
-                for t in all_targets
-                if status_map.get(t.collection_status_id) == CollectionStatusNames.IN_PROGRESS.value
+                1 for t in all_targets if status_map.get(t.collection_status_id) == CollectionStatusNames.IN_PROGRESS.value
             )
             failed_count = sum(
-                1
-                for t in all_targets
-                if status_map.get(t.collection_status_id) == CollectionStatusNames.FAILED.value
+                1 for t in all_targets if status_map.get(t.collection_status_id) == CollectionStatusNames.FAILED.value
             )
             needs_retry_count = sum(
-                1
-                for t in all_targets
-                if status_map.get(t.collection_status_id) == CollectionStatusNames.NEEDS_RETRY.value
+                1 for t in all_targets if status_map.get(t.collection_status_id) == CollectionStatusNames.NEEDS_RETRY.value
             )
             skipped_count = sum(
-                1
-                for t in all_targets
-                if status_map.get(t.collection_status_id) == CollectionStatusNames.SKIPPED.value
+                1 for t in all_targets if status_map.get(t.collection_status_id) == CollectionStatusNames.SKIPPED.value
             )
 
             summary = {
@@ -247,9 +235,7 @@ class CollectionTargetManager:
                 "failed": failed_count,
                 "needs_retry": needs_retry_count,
                 "skipped": skipped_count,
-                "collection_percentage": round((collected_count / total_targets * 100), 2)
-                if total_targets > 0
-                else 0,
+                "collection_percentage": round((collected_count / total_targets * 100), 2) if total_targets > 0 else 0,
             }
 
             status = {
@@ -395,9 +381,7 @@ class CollectionTargetManager:
                 collection_status_obj = self._collection_statuses_dao.get_by_id(
                     each_target.collection_status_id,
                 )
-                status_name = (
-                    collection_status_obj.collection_status_name if collection_status_obj else "unknown"
-                )
+                status_name = collection_status_obj.collection_status_name if collection_status_obj else "unknown"
 
                 result.append(
                     {
@@ -533,9 +517,7 @@ class CollectionTargetManager:
                     collector_name_id,
                     collection_status_id,
                 )
-                collection_targets = [
-                    target for target in all_targets if target.language_code in language_codes
-                ]
+                collection_targets = [target for target in all_targets if target.language_code in language_codes]
 
             elif target_ids and language_code:
                 pass

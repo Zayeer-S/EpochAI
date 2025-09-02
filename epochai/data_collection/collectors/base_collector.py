@@ -2,8 +2,8 @@ from abc import ABC, abstractmethod
 from typing import Any, Dict, List, Optional, Tuple
 
 from epochai.common.config.config_loader import ConfigLoader
-from epochai.common.database.collection_targets_manager import CollectionTargetManager
 from epochai.common.logging_config import get_logger
+from epochai.common.services.collection_targets_manager import CollectionTargetsManager
 
 
 class BaseCollector(ABC):
@@ -13,7 +13,7 @@ class BaseCollector(ABC):
         yaml_config: Dict[str, Any],
         utils_class: Any = None,
         saver_class: Any = None,
-        collection_targets_class: Any = None,
+        service_class: Any = None,
     ):
         try:
             # GET LOGGER
@@ -25,11 +25,11 @@ class BaseCollector(ABC):
             self.config = yaml_config
             self.utils = utils_class
             self.saver = saver_class
-            if collection_targets_class is None:
+            if service_class is None:
                 self.logger.debug("Using default value for self.coll_targets")
-                self.coll_targets = CollectionTargetManager()
+                self.service = CollectionTargetsManager()
             else:
-                self.coll_targets = collection_targets_class()
+                self.service = service_class()
 
             # MISC
             self.current_language_code: str
@@ -38,9 +38,7 @@ class BaseCollector(ABC):
 
             # DATABASE
             self.data_config = ConfigLoader.get_data_config()
-            self.save_to_database: bool = (
-                self.data_config.get("data_output").get("database").get("save_to_database")
-            )
+            self.save_to_database: bool = self.data_config.get("data_output").get("database").get("save_to_database")
 
             if self.save_to_database:
                 self.batch_size = self.data_config.get("data_output").get("database").get("batch_size")
@@ -64,7 +62,7 @@ class BaseCollector(ABC):
     ) -> List[str]:
         """Gets a list of collection types that have uncollected data in the passed-in collector_name"""
         try:
-            return self.coll_targets.get_list_of_uncollected_types_by_collector_name(
+            return self.service.get_list_of_uncollected_types_by_collector_name(
                 collector_name=collector_name,
                 unique_types_only=True,
                 collection_status=collection_status,
@@ -76,7 +74,7 @@ class BaseCollector(ABC):
             return []
 
     def _get_clean_capitalised_name(self, name_to_clean: str) -> str:
-        """Cleans name by removing '_' if present and returning the first word capitalized, otherwise just capitalises"""  # noqa: E501
+        """Cleans name by removing '_' if present and returning the first word capitalized, otherwise just capitalises"""
         if "_" in self.collector_name:
             temp_name = name_to_clean.split("_")
             neat_name = temp_name[0]
@@ -90,7 +88,7 @@ class BaseCollector(ABC):
         collection_target_id: int,
         language_code: str,
     ) -> None:
-        """Appends metadata, collection_target_id and language_code of the just collected collection to current_batch"""  # noqa
+        """Appends metadata, collection_target_id and language_code of the just collected collection to current_batch"""
         if not self.save_to_database:
             self.collected_data.append(metadata)  # Still append to attempt local save
             return
@@ -134,7 +132,7 @@ class BaseCollector(ABC):
         self.current_batch = []
 
     def _unconditionally_save_current_batch(self, log_msg: str) -> None:
-        """Saves current batch regardless of the batches condition (use at end of collection, topic change, etc)"""  # noqa: E501
+        """Saves current batch regardless of the batches condition (use at end of collection, topic change, etc)"""
         if not self.save_to_database or not self.current_batch:
             self.logger.debug(
                 f"{self._unconditionally_save_current_batch.__name__} was called but not executed",
