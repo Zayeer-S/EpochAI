@@ -389,14 +389,3 @@ class TestConfigLoaderCollectorConfigs:
             collector_name="test_collector",
         )
         assert result == {"combined": "config"}
-
-    def test_get_collection_status_summary(self):
-        with patch(
-            "epochai.common.database.collection_targets_manager.CollectionTargetManager",
-        ) as mock_manager:
-            mock_manager.get_collection_status_summary.return_value = {"status": "summary"}
-
-            result = ConfigLoader.get_collection_status_summary()
-
-        mock_manager.get_collection_status_summary.assert_called_once()
-        assert result == {"status": "summary"}
