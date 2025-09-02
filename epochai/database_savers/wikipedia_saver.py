@@ -170,9 +170,10 @@ class WikipediaSaver:
                 self.logger.error(f"Database error while saving '{title}': {general_error}")
 
         if success_count > 0:
-            mark_as_collected = self.collection_statuses_dao.update_collection_status(
+            status_id = self.collection_statuses_dao.get_id_by_name(CollectionStatusNames.COLLECTED.value)
+            mark_as_collected = self.collection_targets_dao.update_collection_status_id(
                 collection_target_id,
-                CollectionStatusNames.COLLECTED.value,
+                status_id,
             )
             if mark_as_collected:
                 self.logger.info(
