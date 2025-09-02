@@ -461,7 +461,7 @@ class CollectionTargetManager:
                 )
             return yaml_config"""
 
-    def get_wikipedia_target_config(
+    def get_wikipedia_targets_config(
         self,
         collector_name: str,
         collection_status: str,
