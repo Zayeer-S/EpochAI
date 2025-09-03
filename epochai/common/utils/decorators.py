@@ -75,9 +75,9 @@ def handle_generic_errors_gracefully(operation_name: str, fallback_value: Any):
                 param_values = _get_param_values(func, args, kwargs)
 
                 if param_values:
-                    error_msg = f"Error during {operation_name} in '{func.__name__}' (params: {param_values})): {general_error}"
+                    error_msg = f"Error {operation_name} in '{func.__name__}' (params: {param_values})): {general_error}"
                 else:
-                    error_msg = f"Error during {operation_name} in '{func.__name__}': {general_error}"
+                    error_msg = f"Error {operation_name} in '{func.__name__}': {general_error}"
 
                 logger = _get_logger(args)
                 if logger:
