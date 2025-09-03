@@ -70,11 +70,12 @@ class CollectorCLI:
     ) -> List[str]:
         """Gets a list of collection types that have uncollected data in the passed-in collector_name"""
         try:
-            return self.reporter.get_collection_type_list(
+            result: List[str] = self.reporter.get_collection_type_list(
                 collector_name=collector_name,
                 unique_types_only=True,
                 collection_status_name=CollectionStatusNames.NOT_COLLECTED.value,
             )
+            return result
         except Exception as general_error:
             self.logger.error(
                 f"Error getting uncollected collection types for {collector_name}: {general_error}",
@@ -84,11 +85,12 @@ class CollectorCLI:
     def _get_available_language_codes(self, collector_name: str) -> List[str]:
         """Gets a list of language codes that have uncollected data in the passed-in collector_name"""
         try:
-            return self.reporter.get_language_code_list(
+            result: List[str] = self.reporter.get_language_code_list(
                 collector_name=collector_name,
                 unique_types_only=True,
                 collection_status=CollectionStatusNames.NOT_COLLECTED.value,
             )
+            return result
         except Exception as general_error:
             self.logger.error(
                 f"Error getting uncollected language codes for {collector_name}: {general_error}",
@@ -177,7 +179,7 @@ class CollectorCLI:
 
             type_details = {}
             for each_type in all_available_types:
-                targets = self.reporter.get_uncollected_targets(each_type, CollectionStatusNames.COLLECTED.value)
+                targets = self.reporter.get_targets_by_type_and_status(each_type, CollectionStatusNames.COLLECTED.value)
                 total_uncollected = sum(len(lang_targets) for lang_targets in targets.values())
                 type_details[each_type] = {
                     "uncollected_count": total_uncollected,
