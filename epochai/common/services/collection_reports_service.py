@@ -23,7 +23,7 @@ class CollectionReportsService:
         except Exception as general_error:
             raise RuntimeError("Failed to initialize the database components") from general_error
 
-    @handle_generic_errors_gracefully("retrieval of collection targets", {})
+    @handle_generic_errors_gracefully("during retrieval of collection targets", {})
     def get_targets_by_type_and_status(
         self,
         collection_type: str,
@@ -55,7 +55,7 @@ class CollectionReportsService:
         self._logger.info(f"Retrieved uncollected {collection_type} targets for {len(result)} languages")
         return result
 
-    @handle_generic_errors_gracefully("retrieval of collection types", [])
+    @handle_generic_errors_gracefully("during retrieval of collection types", [])
     def get_collection_type_list(
         self,
         collector_name: str,
@@ -88,7 +88,7 @@ class CollectionReportsService:
 
         return result
 
-    @handle_generic_errors_gracefully("retrieval of language code list", [])
+    @handle_generic_errors_gracefully("during retrieval of language code list", [])
     def get_language_code_list(
         self,
         collector_name: str,
@@ -119,7 +119,10 @@ class CollectionReportsService:
 
         return result
 
-    @handle_generic_errors_gracefully("retrieving collection status summary", {"by_type_language_status": [], "summary": {}})
+    @handle_generic_errors_gracefully(
+        "during retrieving collection status summary",
+        {"by_type_language_status": [], "summary": {}},
+    )
     def get_collection_status_summary(self) -> Dict[str, Any]:
         """Gets summary of collection status across all types and languages"""
 

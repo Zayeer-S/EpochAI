@@ -20,7 +20,7 @@ class CollectionTargetsQueryService:
         self._database_utils = DatabaseUtils()
         self._logger.debug("Database components initialized for CollectionTargetManager")
 
-    @handle_generic_errors_gracefully("Collection Target retrieval for", [])
+    @handle_generic_errors_gracefully("during Collection Target retrieval for", [])
     def _unused_search_collection_targets(
         self,
         search_term: str,
@@ -56,7 +56,7 @@ class CollectionTargetsQueryService:
         self._logger.info(f"Found {len(result)} targets matching search term '{search_term}'")
         return result
 
-    @handle_generic_errors_gracefully("Wikipedia target retrieval", {})
+    @handle_generic_errors_gracefully("during Wikipedia target retrieval", {})
     def get_wikipedia_targets_config(
         self,
         collector_name: str,
