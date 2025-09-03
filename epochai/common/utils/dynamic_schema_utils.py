@@ -1,13 +1,12 @@
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple
 
 from genson import SchemaBuilder
 import jsonschema
 from jsonschema import ValidationError
 
-from epochai.common.database.dao.cleaned_data_metadata_schemas_dao import CleanedDataMetadataSchemasDAO
-from epochai.common.database.dao.raw_data_metadata_schemas_dao import RawDataMetadataSchemasDAO
 from epochai.common.logging_config import get_logger
+from epochai.common.protocols.metadata_schema_dao_protocol import MetadataSchemaDAOProtocol
 from epochai.common.utils.decorators import handle_generic_errors_gracefully, handle_initialization_errors
 
 
@@ -18,16 +17,18 @@ class DynamicSchemaUtils:
         name: str,
         version: str,
         config: Any,
-        metadata_schema_dao_class: Union[CleanedDataMetadataSchemasDAO, RawDataMetadataSchemasDAO],
+        metadata_schema_dao_class: MetadataSchemaDAOProtocol,
     ):
         self._logger = get_logger(__name__)
+
+        # GET CONFIG VALUES
         self._schema_cache_limit = int(config.get("schema_cache_limit"))
         self._schema_check_interval = int(config.get("schema_check_interval"))
 
+        # SET PARAMETERS TO INSTANCE VARS
         self._name = name
         self._version = version
-
-        self.dao = metadata_schema_dao_class
+        self._dao = metadata_schema_dao_class
 
         # SCHEMA MANAGEMENT
         self._metadata_schema_cache: Optional[Dict[str, Any]] = None
@@ -47,7 +48,7 @@ class DynamicSchemaUtils:
     @handle_generic_errors_gracefully("while loading schema from database", None)
     def _load_schema_from_database(self) -> None:
         """Load current metadata schema ffrom the the database"""
-        all_schemas = self.dao.get_all()
+        all_schemas = self._dao.get_all()
 
         for each_schema in all_schemas:
             schema_content = each_schema.metadata_schema
@@ -123,12 +124,12 @@ class DynamicSchemaUtils:
             makes a schema not found in the database.
         """
 
-        existing_schema = self.dao.find_schema_by_content(new_schema)
+        existing_schema = self._dao.find_schema_by_content(new_schema)
         if existing_schema and existing_schema.id:
             self._logger.info(f"Schema already exists in the database (ID: {existing_schema.id})")
             return existing_schema.id
 
-        new_schema_id = self.dao.create_schema(new_schema)
+        new_schema_id = self._dao.create_schema(new_schema)
         if new_schema_id:
             self._logger.info(f"Cached new schema to database (id: {new_schema_id})")
             return new_schema_id
@@ -140,7 +141,7 @@ class DynamicSchemaUtils:
     def _check_for_schema_updates(self) -> bool:
         """Checks if schema has been updated in database and reloads if necessary"""
         current_schema_id = self._metadata_schema_id
-        all_schemas = self.dao.get_all()
+        all_schemas = self._dao.get_all()
 
         for each_schema in all_schemas:
             schema_content = each_schema.metadata_schema
