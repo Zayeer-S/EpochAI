@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional
 from epochai.common.config.config_loader import ConfigLoader
 from epochai.common.utils.wikipedia_utils import WikipediaUtils
 from epochai.data_collection.collectors.base_collector import BaseCollector
-from epochai.database_savers.wikipedia_saver import WikipediaSaver
+from epochai.data_collection.savers.wikipedia_saver import WikipediaSaver
 
 
 class WikipediaCollector(BaseCollector):
@@ -12,11 +12,17 @@ class WikipediaCollector(BaseCollector):
     ):
         self.yaml_config = ConfigLoader.get_wikipedia_yaml_config()
 
+        self._collector_name = self.yaml_config.get("collector_name")
+        self._collector_version = self.yaml_config.get("current_schema_version")
+
         super().__init__(
-            collector_name=self.yaml_config.get("api").get("collector_name"),
+            collector_name=self._collector_name,
             yaml_config=self.yaml_config,
             utils_class=WikipediaUtils(self.yaml_config),
-            saver_class=WikipediaSaver(),
+            saver_class=WikipediaSaver(
+                collector_name=self._collector_name,
+                collector_version=self._collector_version,
+            ),
         )
 
     def collect_each_page_metadata(
