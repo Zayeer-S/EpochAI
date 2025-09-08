@@ -164,6 +164,13 @@ class ConfigLoader:
         return merged_config
 
     @staticmethod
+    def get_metadata_schema_config() -> Dict[str, Any]:
+        """Gets the YAML metadata_schema portion of the config"""
+        whole_config = ConfigLoader.load_the_config()
+
+        return whole_config.get("metadata_schema")
+
+    @staticmethod
     def get_logging_config() -> Dict[str, Any]:
         """Get logging configuration and validate it"""
         config = ConfigLoader.load_the_config()
