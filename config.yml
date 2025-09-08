@@ -1,42 +1,48 @@
 # Logger setup
 logging:
   level: "INFO"
-  log_to_file: true
+  log_to_file: True
   log_directory: "logs"
+
+# Schema Setup
+metadata_schema:
+  schema_cache_limit: 3
+  schema_check_interval: 5
 
 # Data Setup
 data_settings:
   data_output:
     directory: "data/raw"
     default_type_wikipedia: "wikipedia_data"
-    separate_files_by_year: false
+    separate_files_by_year: False
     file_format: "csv"
 
     database:
-      save_to_database: true # True = Save to database incrementally. False = Save to file at end
+      save_to_database: True # True = Save to database incrementally. False = Save to file at end
       batch_size: 10
 
   data_validator:
     validate_before_save: False # True = Yes, validate before saving (and vice versa)
-    min_content_length: 10
+    min_content_length: 1
     error_logging_limit: 10
     utf8_corruption_patterns: [
       'Ã©', 'Ã¨', 'Ã ', 'Ã¡', 'Ã¢', 'Ã¤', 'Ã§', 'Ã¯', 'Ã´', 'Ã¹', 'Ã»', 'Ã¼', 'â€™', 'â€œ', 'â€', 'â€¢', 'â€"', 'â€"', 'Â', 'Ž', 'â€ž', 'â€º'
     ]
-    required_fields_wikipedia: ['title', 'content', 'url', 'language', 'collected_at']
+    required_fields_wikipedia: ['title', 'content', 'language', 'collected_at']
 
   cleaners:
     wikipedia:
-      cleaner_name: "wikipedia_cleaner" # should prolly not change this
-      current_version: "1.0.0" # Lets us control which json schema to use
-      schema_cache_limit: 3
-      schema_check_interval: 5
+      cleaner_name: "wikipedia_cleaner"
+      current_schema_version: "1.0.0"
 
 # Default setup for collectors
 defaults:
   wikipedia:
+    collector_name: "wikipedia_collector"
+    current_schema_version: "1.0.0"
+
     api:
-      collector_name: "wikipedia_collector"
+      collector_name: "wikipedia_collector" # TODO DELETE
       language: ["en"]
       rate_limit_delay: 2.0
       max_retries: 3
@@ -47,7 +53,7 @@ defaults:
 # Fine tune Wikipedia API config settings
 wikipedia:
   api:
-    collector_name: "wikipedia_collector"
+    collector_name: "wikipedia_collector" # TODO DELETE
     language: ["en", "fr"]
     rate_limit_delay: 0.5
     max_retries: 5
