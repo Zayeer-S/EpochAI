@@ -87,7 +87,7 @@ class RunCollectionMetadataDAO:
 
             if affected_rows > 0:
                 self.logger.info(
-                    f"Updated run {run_id} completion: {attempts_successful} successful, {attempts_failed} failed",  # noqa
+                    f"Updated run {run_id} completion: {attempts_successful} successful, {attempts_failed} failed",
                 )
                 return True
             self.logger.warning(f"No run found with ID {run_id} to update")
@@ -182,21 +182,15 @@ class RunCollectionMetadataDAO:
 
             if results:
                 total_successful = sum(row["avg_successful"] * row["run_count"] for row in results)
-                total_attempts = sum(
-                    (row["avg_successful"] + row["avg_failed"]) * row["run_count"] for row in results
-                )
+                total_attempts = sum((row["avg_successful"] + row["avg_failed"]) * row["run_count"] for row in results)
 
                 if total_attempts > 0:
                     summary["avg_success_rate"] = round((total_successful / total_attempts * 100), 2)
 
                 weighted_duration = sum(
-                    row["avg_duration_minutes"] * row["run_count"]
-                    for row in results
-                    if row["avg_duration_minutes"]
+                    row["avg_duration_minutes"] * row["run_count"] for row in results if row["avg_duration_minutes"]
                 )
-                total_runs_with_duration = sum(
-                    row["run_count"] for row in results if row["avg_duration_minutes"]
-                )
+                total_runs_with_duration = sum(row["run_count"] for row in results if row["avg_duration_minutes"])
 
                 if total_runs_with_duration > 0:
                     summary["avg_duration_minutes"] = round(

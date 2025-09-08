@@ -447,7 +447,7 @@ def main():
                     }
 
                     for status, display_name in status_display_names.items():
-                        if status in status_groups and status_groups[status]:
+                        if status_groups.get(status):
                             print(f"\t{display_name}:")
 
                             for col_type, languages in status_groups[status].items():

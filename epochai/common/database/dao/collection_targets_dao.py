@@ -1,4 +1,3 @@
-# ruff: noqa: E501
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 

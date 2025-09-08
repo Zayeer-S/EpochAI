@@ -197,7 +197,7 @@ class CleanedDataDAO:
 
         except Exception as general_error:
             self.logger.error(
-                f"Error getting cleaned data by validation status '{validation_status_name}': {general_error}",  # noqa
+                f"Error getting cleaned data by validation status '{validation_status_name}': {general_error}",
             )
             return []
 

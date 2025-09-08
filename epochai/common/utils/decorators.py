@@ -64,7 +64,7 @@ def handle_initialization_errors(operation_name: str):
 
 
 def handle_generic_errors_gracefully(operation_name: str, fallback_value: Any):
-    """Decorator for graceful DAO operation error handling"""
+    """Decorator for graceful operation error handling"""
 
     def decorator(func):
         def wrapper(*args, **kwargs):

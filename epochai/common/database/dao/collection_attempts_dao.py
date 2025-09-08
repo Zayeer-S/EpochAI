@@ -34,7 +34,7 @@ class CollectionAttemptsDAO:
             (collection_target_id, language_code, search_term_used, attempt_status_id, error_type_id, error_message, created_at)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
             RETURNING id
-        """  # noqa
+        """
 
         try:
             current_timestamp = datetime.now()
@@ -51,11 +51,11 @@ class CollectionAttemptsDAO:
 
             if result:
                 self.logger.info(
-                    f"Created collection attempt for config '{collection_target_id}': {search_term_used} ({language_code})",  # noqa
+                    f"Created collection attempt for config '{collection_target_id}': {search_term_used} ({language_code})",
                 )
                 return result
             self.logger.error(
-                f"Failed to create collection attempt for config '{collection_target_id}': {search_term_used} ({language_code})",  # noqa
+                f"Failed to create collection attempt for config '{collection_target_id}': {search_term_used} ({language_code})",
             )
             return None
 
