@@ -405,7 +405,7 @@ class TestWikipediaApiConfig:
 
         with pytest.raises(
             ValueError,
-            match="recursive_limit is currently '5' which is greater than max: 3. Just use iteration at this point.",  # noqa
+            match="recursive_limit is currently '5' which is greater than max: 3. Just use iteration at this point.",
         ):
             WikipediaApiConfig(
                 collector_name="test_collector",

@@ -209,12 +209,12 @@ class WikipediaUtils:
             recursive_limit = self.yaml_config["api"]["recursive_limit"]
         elif recursive_limit <= 0:
             self.logger.warning(
-                f"Recursive limit reached for '{page_title}' in function {self.handle_any_disambiguation_error.__name__}",  # noqa
+                f"Recursive limit reached for '{page_title}' in function {self.handle_any_disambiguation_error.__name__}",
             )
             return None
 
         self.logger.warning(
-            f"Disambiguation for page title '{page_title}' in '{language_code}'. Options: {options[:search_max_results]}",  # noqa
+            f"Disambiguation for page title '{page_title}' in '{language_code}'. Options: {options[:search_max_results]}",
         )
 
         for option in options[:max_retries]:

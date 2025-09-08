@@ -29,7 +29,7 @@ class DatabaseConfig(BaseModel):
 
         if not (min_batch_size <= self.batch_size <= max_batch_size):
             raise ValueError(
-                f"batch_size currently {self.batch_size}, must be: {min_batch_size} <= batch_size <= {max_batch_size}",  # noqa
+                f"batch_size currently {self.batch_size}, must be: {min_batch_size} <= batch_size <= {max_batch_size}",
             )
 
         return self
@@ -73,7 +73,7 @@ class DataValidatorConfig(BaseModel):
         min_content_length = data_validator_constraints.get("min_content_length")
         if not (self.min_content_length >= min_content_length):
             raise ValueError(
-                f"min_content_length currently '{self.min_content_length}', must be: min_content_length >= {min_content_length}",  # noqa
+                f"min_content_length currently '{self.min_content_length}', must be: min_content_length >= {min_content_length}",
             )
 
         error_logging_limit = data_validator_constraints.get("error_logging_limit")
@@ -127,14 +127,14 @@ class WikipediaApiConfig(BaseModel):
         min_rate_limit_delay = api_constraints.get("min_rate_limit_delay")
         if self.rate_limit_delay < min_rate_limit_delay:
             raise ValueError(
-                f"rate_limit_delay is currently '{self.rate_limit_delay}', must be: rate_limit_delay >= {min_rate_limit_delay}",  # noqa
+                f"rate_limit_delay is currently '{self.rate_limit_delay}', must be: rate_limit_delay >= {min_rate_limit_delay}",
             )
 
         min_retries = api_constraints.get("min_retries")
         max_retries = api_constraints.get("max_retries")
         if not (min_retries <= self.max_retries <= max_retries):
             raise ValueError(
-                f"max_retries is currently '{self.max_retries}', must be: {min_retries} <= max_retries <= {max_retries}",  # noqa
+                f"max_retries is currently '{self.max_retries}', must be: {min_retries} <= max_retries <= {max_retries}",
             )
 
         search_max_results = api_constraints.get("search_max_results")
@@ -146,7 +146,7 @@ class WikipediaApiConfig(BaseModel):
         min_timeout = api_constraints.get("min_request_timeout")
         if self.request_timeout < min_timeout:
             raise ValueError(
-                f"request_timeout is currently '{self.request_timeout}', must be: request_timeout >= {min_timeout}",  # noqa
+                f"request_timeout is currently '{self.request_timeout}', must be: request_timeout >= {min_timeout}",
             )
 
         min_recursive_limit = api_constraints.get("min_recursive_limit")
