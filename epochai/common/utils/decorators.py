@@ -1,9 +1,24 @@
 # ruff: noqa: E501
 
+from enum import Enum
 from typing import Any, Dict, Tuple
 
 
-def _get_param_values(func, args: Tuple, kwargs: Dict) -> str:
+class ErrorSeverityNames(Enum):
+    FAST = "fail_fast"
+    GRACEFUL = "graceful"
+
+
+_fail_fast = ErrorSeverityNames.FAST.value
+_graceful = ErrorSeverityNames.GRACEFUL.value
+
+
+def _get_param_values(
+    func,
+    args: Tuple,
+    kwargs: Dict,
+) -> str:
+    """Gets param values passed into function"""
     import inspect
 
     try:
@@ -25,6 +40,32 @@ def _get_param_values(func, args: Tuple, kwargs: Dict) -> str:
         if kwargs:
             params.extend([f"{k}={v!r}" for k, v in kwargs.items()])
         return ", ".join(params)
+
+
+def _print_generic_error(
+    func,
+    args,
+    kwargs,
+    error_severity: str,
+    operation_name: str,
+    error: Exception,
+) -> None:
+    """Prints error messages for generic catches"""
+    param_values = _get_param_values(func=func, args=args, kwargs=kwargs)
+
+    if param_values:
+        custom_msg = f"Error {operation_name} in '{func.__name__}' (params: {param_values})"
+    else:
+        custom_msg = f"Error {operation_name} in '{func.__name__}'"
+
+    if error_severity == _graceful:
+        logger = _get_logger(args)
+        if logger:
+            logger.error(f"{custom_msg}: {error}")
+        else:
+            print(f"No logger found: {custom_msg} - {error}")  # Fallback logging
+    elif error_severity == _fail_fast:
+        raise type(error)(custom_msg) from error
 
 
 def _get_logger(args: Tuple):
@@ -63,7 +104,10 @@ def handle_initialization_errors(operation_name: str):
     return decorator
 
 
-def handle_generic_errors_gracefully(operation_name: str, fallback_value: Any):
+def handle_generic_errors_gracefully(
+    operation_name: str,
+    fallback_value: Any,
+):
     """Decorator for graceful operation error handling"""
 
     def decorator(func):
@@ -71,20 +115,43 @@ def handle_generic_errors_gracefully(operation_name: str, fallback_value: Any):
             try:
                 return func(*args, **kwargs)
 
-            except Exception as general_error:
-                param_values = _get_param_values(func, args, kwargs)
-
-                if param_values:
-                    error_msg = f"Error {operation_name} in '{func.__name__}' (params: {param_values})): {general_error}"
-                else:
-                    error_msg = f"Error {operation_name} in '{func.__name__}': {general_error}"
-
-                logger = _get_logger(args)
-                if logger:
-                    logger.error(error_msg)
-                else:
-                    print(f"No logger found: {error_msg}")  # Fallback logging
+            except Exception as error:
+                if isinstance(error, (KeyboardInterrupt, SystemError, GeneratorExit)):
+                    raise
+                _print_generic_error(
+                    func=func,
+                    args=args,
+                    kwargs=kwargs,
+                    error_severity=_graceful,
+                    operation_name=operation_name,
+                    error=error,
+                )
                 return fallback_value
+
+        return wrapper
+
+    return decorator
+
+
+def handle_generic_errors_fail_fast(operation_name: str):
+    """Decorator for fail fast operation error handling"""
+
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            try:
+                return func(*args, **kwargs)
+
+            except Exception as error:
+                if isinstance(error, (KeyboardInterrupt, SystemError, GeneratorExit)):
+                    raise
+                _print_generic_error(
+                    func=func,
+                    args=args,
+                    kwargs=kwargs,
+                    error_severity=_fail_fast,
+                    operation_name=operation_name,
+                    error=error,
+                )
 
         return wrapper
 
