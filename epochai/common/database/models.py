@@ -491,7 +491,7 @@ class LinkAttemptsToRuns:
 
 
 @dataclass
-class DebugWikipediaResults:
+class CheckCollectionTargets:
     """debug_wikipedia_results table model"""
 
     id: Optional[int] = None
@@ -512,7 +512,7 @@ class DebugWikipediaResults:
     def from_dict(
         cls,
         data: Dict[str, Any],
-    ) -> "DebugWikipediaResults":
+    ) -> "CheckCollectionTargets":
         """Creates instance from database row dict"""
         search_results_found = data.get("search_results_found")
         if isinstance(search_results_found, str):
