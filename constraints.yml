@@ -6,7 +6,7 @@ data_output:
     max_batch_size: 1000
 
 data_validator:
-  min_content_length: 10
+  min_content_length: 1
   error_logging_limit: 10
 
 logging_config:

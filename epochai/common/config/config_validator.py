@@ -109,7 +109,6 @@ class LoggingConfig(BaseModel):
 
 
 class WikipediaApiConfig(BaseModel):
-    collector_name: str
     language: List[str]
     rate_limit_delay: float
     max_retries: int

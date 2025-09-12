@@ -42,7 +42,6 @@ defaults:
     current_schema_version: "1.0.0"
 
     api:
-      collector_name: "wikipedia_collector" # TODO DELETE
       language: ["en"]
       rate_limit_delay: 2.0
       max_retries: 3
@@ -53,7 +52,6 @@ defaults:
 # Fine tune Wikipedia API config settings
 wikipedia:
   api:
-    collector_name: "wikipedia_collector" # TODO DELETE
     language: ["en", "fr"]
     rate_limit_delay: 0.5
     max_retries: 5
