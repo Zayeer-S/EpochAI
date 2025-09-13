@@ -5,9 +5,12 @@ from typing import Any, Dict, List, Optional
 from epochai.common.database.models import CleanedData, RawData
 from epochai.common.logging_config import get_logger
 from epochai.common.services.cleaning_service import CleaningService
+from epochai.common.utils.decorators import handle_initialization_errors
+from epochai.common.utils.schema_utils import SchemaUtils
 
 
 class BaseCleaner(ABC):
+    @handle_initialization_errors(f"{__name__} Initialization")
     def __init__(
         self,
         cleaner_name: str,
@@ -19,27 +22,37 @@ class BaseCleaner(ABC):
 
         self.service = CleaningService(cleaner_name, cleaner_version)
 
+        from epochai.common.database.dao.cleaned_data_metadata_schemas_dao import CleanedDataMetadataSchemasDAO
+
+        self._schema_utils = SchemaUtils(
+            name=self.cleaner_name,
+            version=self.cleaner_version,
+            metadata_schema_dao_class=CleanedDataMetadataSchemasDAO(),
+            schema_name_field="cleaner_name",
+            schema_version_field="current_schema_version",
+        )
+
         self.logger.info(f"Initialized {self.cleaner_name} v{self.cleaner_version}")
 
     @abstractmethod
-    def clean_content(
+    def transform_content(
         self,
         raw_data: RawData,
     ) -> Dict[str, Any]:
         """
-        Cleans raw data
+        Transforms raw data into a format that is accepted and validated against the schema
 
         Returns:
             Dictionary containing cleaned metadata
         """
-        raise NotImplementedError(f"Subclasses must implement {self.clean_content.__name__} method")
+        raise NotImplementedError(f"Subclasses must implement {self.transform_content.__name__} method")
 
     def clean_single_record(
         self,
         raw_data_id: int,
     ) -> Optional[int]:
         """ "
-        Cleans a single raw data record
+        Transforms and validates a single raw data record
 
         Returns:
             id of cleaned data row if succeeds, None if fails
@@ -65,20 +78,20 @@ class BaseCleaner(ABC):
                     )
                     return cleaned.id
 
-            cleaned_metadata = self.clean_content(raw_data)
+            transformed_metadata = self.transform_content(raw_data)
 
-            self.service.handle_schema_management(cleaned_metadata)
-
-            is_valid, validation_error = self.service.validate_cleaned_content(cleaned_metadata)
+            is_valid, validation_error = self._schema_utils.validate_content(transformed_metadata)
 
             cleaning_time_ms = int((time.time() - start_time) * 1000)
+            schema_id = self._schema_utils.get_metadata_schema_id()
 
             cleaned_data_id = self.service.save_cleaned_content(
                 raw_data=raw_data,
-                cleaned_metadata=cleaned_metadata,
+                transformed_metadata=transformed_metadata,
                 is_valid=is_valid,
                 validation_error=validation_error,
                 cleaning_time_ms=cleaning_time_ms,
+                schema_id=schema_id,
             )
 
             return cleaned_data_id
@@ -87,8 +100,10 @@ class BaseCleaner(ABC):
             cleaning_time_ms = int((time.time() - start_time) * 1000)
             self.logger.error(f"Error cleaning raw data {raw_data_id}: {general_error}")
 
+            schema_id = self._schema_utils.get_metadata_schema_id()
             if "raw_data" in locals() and raw_data:
-                self.service.save_error_record(raw_data, general_error, cleaning_time_ms)
+                schema_id = self._schema_utils.get_metadata_schema_id()
+                self.service.save_error_record(raw_data, general_error, cleaning_time_ms, schema_id)
 
             return None
 
@@ -229,15 +244,3 @@ class BaseCleaner(ABC):
                 "cleaner_name": self.cleaner_name,
                 "cleaner_version": self.cleaner_version,
             }
-
-    def reload_schema_from_database(self) -> bool:
-        """Reloads schema from database"""
-        return self.service.reload_schema_from_database()
-
-    def get_schema_info(self) -> Dict[str, Any]:
-        """Gets schema info"""
-        return self.service.get_schema_info()
-
-    def get_metadata_schema_id(self) -> Optional[int]:
-        """Gets metadata schema id"""
-        return self.service.get_metadata_schema_id()

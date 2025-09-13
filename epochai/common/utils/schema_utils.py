@@ -18,7 +18,6 @@ class SchemaUtils:
         metadata_schema_dao_class: MetadataSchemaDAOProtocol,
         schema_name_field: str,
         schema_version_field: str,
-        custom_validation_function: Any,
     ):
         self._logger = get_logger(__name__)
 
@@ -33,7 +32,6 @@ class SchemaUtils:
         self._dao = metadata_schema_dao_class
         self._schema_name_field = schema_name_field
         self._schema_version_field = schema_version_field
-        self._custom_validation_function = custom_validation_function
 
         # SCHEMA MANAGEMENT
         self._metadata_schema_cache: Optional[Dict[str, Any]] = None
@@ -119,18 +117,6 @@ class SchemaUtils:
             }
             return False, error_dict
 
-    @handle_generic_errors_gracefully("while validating with custom function", (False, None))
-    def _validate_with_custom_function(
-        self,
-        data: Dict[str, Any],
-    ) -> Tuple[bool, Optional[Dict[str, Any]]]:
-        """Validates using custom data validation function"""
-        if self._custom_validation_function:
-            return self._custom_validation_function(data)
-
-        self._logger.warning("No custom data validation function provided")
-        return True, None
-
     @handle_generic_errors_gracefully("while getting metadata schema ID", None)
     def get_metadata_schema_id(self) -> Optional[int]:
         if self._metadata_schema_id is None:
@@ -143,11 +129,12 @@ class SchemaUtils:
     ) -> Tuple[bool, Optional[Dict[str, Any]]]:
         """Validates content using schema or passed in function (if available)"""
         if self._schema_validator is not None:
-            is_valid, schema_errors = self._validate_with_json_schema(data)
-            if not is_valid:
-                return is_valid, schema_errors
-
-        return self._validate_with_custom_function(data)  # If schema not available
+            return self._validate_with_json_schema(data)
+        error_dict = {
+            "validation_errors": ["No JSON schema validator available"],
+            "validation_system_error": True,
+        }
+        return False, error_dict
 
     def reload_schema_from_database(self) -> bool:
         """Reload schema from database (call this when it changes externally)"""
