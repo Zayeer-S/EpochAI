@@ -5,6 +5,7 @@ from epochai.common.config.config_loader import ConfigLoader
 from epochai.common.logging_config import get_logger
 from epochai.common.services.collection_reports_service import CollectionReportsService
 from epochai.common.services.collection_targets_query_service import CollectionTargetsQueryService
+from epochai.data_collection.checker import Checker
 
 
 class BaseCollector(ABC):
@@ -243,4 +244,37 @@ class BaseCollector(ABC):
         """Actually collects the data and saves it to the database (if not saving locally)"""
         raise NotImplementedError(
             f"Error subclasses must implement {self._collect_and_save.__name__} function",
+        )
+
+    def check_targets(
+        self,
+        collection_status: str,
+        collection_types: Optional[List[str]] = None,
+        target_ids: Optional[List[int]] = None,
+        language_codes: Optional[List[str]] = None,
+        recheck: Optional[bool] = None,
+    ) -> Any:
+        """Checks collection_targets using"""
+        target_config = ConfigLoader.get_wikipedia_targets_config(
+            collector_name=self.collector_name,
+            collection_status=collection_status,
+            collection_types=collection_types,
+            target_ids=target_ids,
+            language_codes=language_codes,
+        )
+
+        checker = Checker(
+            target_config=target_config,
+            utils_instance=self.utils,
+            saver_instance=self.saver,
+            yaml_config=self.config,
+        )
+
+        return checker.check_targets(
+            collector_name=self.collector_name,
+            collection_status=collection_status,
+            collection_types=collection_types,
+            target_ids=target_ids,
+            language_codes=language_codes,
+            recheck=recheck,
         )

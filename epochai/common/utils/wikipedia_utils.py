@@ -249,7 +249,7 @@ class WikipediaUtils:
         self.logger.error(f"Could not resolve disambiguation error for '{page_title}'")
         return None
 
-    def get_wikipedia_page(
+    def get_page(
         self,
         page_title: str,
         language_code: str,
@@ -310,7 +310,7 @@ class WikipediaUtils:
 
         for attempt in range(max_retries):
             try:
-                page = self.get_wikipedia_page(page_title, language_code)
+                page = self.get_page(page_title, language_code)
 
                 if page is None:
                     self.logger.warning(f"Could not retrieve '{page_title}' in language '{language_code}'")
