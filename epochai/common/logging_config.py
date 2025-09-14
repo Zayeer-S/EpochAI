@@ -12,10 +12,10 @@ def setup_logging(log_level="INFO", log_to_file=True, log_dir="logs"):
         log_to_file (bool): Whether to log to file in addition to the console
         log_dir (str): The directory to store the log files
     """
+    current_dir = os.path.dirname(__file__)
+    project_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
 
     if log_to_file:
-        current_dir = os.path.dirname(__file__)
-        project_root = os.path.abspath(os.path.join(current_dir, "..", ".."))
         log_dir = os.path.join(project_root, log_dir)
         os.makedirs(log_dir, exist_ok=True)
 
@@ -36,7 +36,7 @@ def setup_logging(log_level="INFO", log_to_file=True, log_dir="logs"):
 
     if log_to_file:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        log_filename = f"predictai_{timestamp}.log"
+        log_filename = f"{project_root.lower()}_{timestamp}.log"
         log_filepath = os.path.join(log_dir, log_filename)
 
         file_handler = logging.FileHandler(log_filepath)
