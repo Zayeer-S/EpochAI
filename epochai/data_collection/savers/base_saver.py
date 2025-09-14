@@ -47,18 +47,12 @@ class BaseSaver(ABC):
                 metadata_schema_dao_class=RawDataMetadataSchemasDAO(),
                 schema_name_field="collector_name",
                 schema_version_field="current_schema_version",
-                custom_validation_function=self._get_custom_validation_function,
             )
 
             self._logger.debug(f"Initialized {self.__class__.__name__} for {collector_name} v{collector_version}")
 
         else:
             self._logger.debug(f"Initialized {self.__class__.__name__} for {collector_name} in Test Mode")
-
-    @abstractmethod
-    def _get_custom_validation_function(self) -> Any:
-        """Returns the custom validatio function for this data source"""
-        raise NotImplementedError(f"Subclasses must implement {self._get_custom_validation_function.__name__} function")
 
     @abstractmethod
     def _prepare_metadata_for_storage(
