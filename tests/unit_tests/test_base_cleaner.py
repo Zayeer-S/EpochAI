@@ -10,7 +10,7 @@ from epochai.data_processing.cleaners.base_cleaner import BaseCleaner
 class ConcreteCleaner(BaseCleaner):
     """Concrete implementation of BaseCleaner for testing"""
 
-    def clean_content(self, raw_data: RawData) -> dict:
+    def transform_content(self, raw_data: RawData) -> dict:
         """Mock implementation that returns test metadata"""
         return {
             "cleaned_content": f"Cleaned: {raw_data.title}",
@@ -24,7 +24,7 @@ class ConcreteCleaner(BaseCleaner):
 class FailingCleaner(BaseCleaner):
     """Cleaner that raises exceptions for testing error handling"""
 
-    def clean_content(self, raw_data: RawData) -> dict:
+    def transform_content(self, raw_data: RawData) -> dict:
         raise ValueError("Test cleaning error")
 
 
@@ -35,15 +35,19 @@ def mock_cleaning_service():
     service.raw_data_dao = Mock()
     service.cleaned_data_dao = Mock()
     service.cleaned_data_dao.get_by_raw_data_id = Mock(return_value=[])
-    service.handle_schema_management = Mock()
-    service.validate_cleaned_content = Mock(return_value=(True, None))
     service.save_cleaned_content = Mock(return_value=123)
     service.save_error_record = Mock(return_value=456)
     service.get_validation_status_id = Mock(return_value=1)
-    service.reload_schema_from_database = Mock(return_value=True)
-    service.get_schema_info = Mock(return_value={"test": "info"})
-    service.get_metadata_schema_id = Mock(return_value=1)
     return service
+
+
+@pytest.fixture
+def mock_schema_utils():
+    """Mock SchemaUtils with all necessary methods"""
+    schema_utils = Mock()
+    schema_utils.validate_content = Mock(return_value=(True, None))
+    schema_utils.get_metadata_schema_id = Mock(return_value=1)
+    return schema_utils
 
 
 @pytest.fixture
@@ -96,8 +100,19 @@ def cleaned_data_records():
 
 class TestBaseCleanerInitialization:
     @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_initialization_success(self, mock_service_class, mock_cleaning_service):
+    @patch("epochai.data_processing.cleaners.base_cleaner.SchemaUtils")
+    @patch("epochai.common.database.dao.cleaned_data_metadata_schemas_dao.CleanedDataMetadataSchemasDAO")
+    def test_initialization_success(
+        self,
+        mock_dao_class,
+        mock_schema_utils_class,
+        mock_service_class,
+        mock_cleaning_service,
+        mock_schema_utils,
+    ):
         mock_service_class.return_value = mock_cleaning_service
+        mock_schema_utils_class.return_value = mock_schema_utils
+        mock_dao_class.return_value = Mock()
 
         cleaner = ConcreteCleaner("test_cleaner", "1.0.0")
 
@@ -105,26 +120,34 @@ class TestBaseCleanerInitialization:
         assert cleaner.cleaner_version == "1.0.0"
         assert cleaner.service == mock_cleaning_service
         mock_service_class.assert_called_once_with("test_cleaner", "1.0.0")
+        mock_schema_utils_class.assert_called_once()
 
 
-class TestCleanContent:
-    def test_clean_content_abstract_method(self):
-        """Test that BaseCleaner is abstract and requires clean_content implementation"""
+class TestTransformContent:
+    def test_transform_content_abstract_method(self):
+        """Test that BaseCleaner is abstract and requires transform_content implementation"""
         with pytest.raises(TypeError):
             BaseCleaner("test", "1.0")
 
 
 class TestCleanSingleRecord:
     @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
+    @patch("epochai.data_processing.cleaners.base_cleaner.SchemaUtils")
+    @patch("epochai.common.database.dao.cleaned_data_metadata_schemas_dao.CleanedDataMetadataSchemasDAO")
     @patch("epochai.data_processing.cleaners.base_cleaner.time.time")
     def test_clean_single_record_success(
         self,
         mock_time,
+        mock_dao_class,
+        mock_schema_utils_class,
         mock_service_class,
         mock_cleaning_service,
+        mock_schema_utils,
         sample_raw_data,
     ):
         mock_service_class.return_value = mock_cleaning_service
+        mock_schema_utils_class.return_value = mock_schema_utils
+        mock_dao_class.return_value = Mock()
         mock_time.side_effect = [0.0, 0.1]  # start time, end time
         mock_cleaning_service.raw_data_dao.get_by_id.return_value = sample_raw_data
 
@@ -133,13 +156,24 @@ class TestCleanSingleRecord:
 
         assert result == 123
         mock_cleaning_service.raw_data_dao.get_by_id.assert_called_once_with(1)
-        mock_cleaning_service.handle_schema_management.assert_called_once()
-        mock_cleaning_service.validate_cleaned_content.assert_called_once()
+        mock_schema_utils.validate_content.assert_called_once()
+        mock_schema_utils.get_metadata_schema_id.assert_called_once()
         mock_cleaning_service.save_cleaned_content.assert_called_once()
 
     @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_clean_single_record_raw_data_not_found(self, mock_service_class, mock_cleaning_service):
+    @patch("epochai.data_processing.cleaners.base_cleaner.SchemaUtils")
+    @patch("epochai.common.database.dao.cleaned_data_metadata_schemas_dao.CleanedDataMetadataSchemasDAO")
+    def test_clean_single_record_raw_data_not_found(
+        self,
+        mock_dao_class,
+        mock_schema_utils_class,
+        mock_service_class,
+        mock_cleaning_service,
+        mock_schema_utils,
+    ):
         mock_service_class.return_value = mock_cleaning_service
+        mock_schema_utils_class.return_value = mock_schema_utils
+        mock_dao_class.return_value = Mock()
         mock_cleaning_service.raw_data_dao.get_by_id.return_value = None
 
         cleaner = ConcreteCleaner("test_cleaner", "1.0.0")
@@ -149,13 +183,20 @@ class TestCleanSingleRecord:
         mock_cleaning_service.raw_data_dao.get_by_id.assert_called_once_with(999)
 
     @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
+    @patch("epochai.data_processing.cleaners.base_cleaner.SchemaUtils")
+    @patch("epochai.common.database.dao.cleaned_data_metadata_schemas_dao.CleanedDataMetadataSchemasDAO")
     def test_clean_single_record_already_cleaned(
         self,
+        mock_dao_class,
+        mock_schema_utils_class,
         mock_service_class,
         mock_cleaning_service,
+        mock_schema_utils,
         sample_raw_data,
     ):
         mock_service_class.return_value = mock_cleaning_service
+        mock_schema_utils_class.return_value = mock_schema_utils
+        mock_dao_class.return_value = Mock()
         mock_cleaning_service.raw_data_dao.get_by_id.return_value = sample_raw_data
 
         existing_cleaned = CleanedData(
@@ -172,18 +213,25 @@ class TestCleanSingleRecord:
         mock_cleaning_service.save_cleaned_content.assert_not_called()
 
     @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
+    @patch("epochai.data_processing.cleaners.base_cleaner.SchemaUtils")
+    @patch("epochai.common.database.dao.cleaned_data_metadata_schemas_dao.CleanedDataMetadataSchemasDAO")
     @patch("epochai.data_processing.cleaners.base_cleaner.time.time")
     def test_clean_single_record_validation_error(
         self,
         mock_time,
+        mock_dao_class,
+        mock_schema_utils_class,
         mock_service_class,
         mock_cleaning_service,
+        mock_schema_utils,
         sample_raw_data,
     ):
         mock_service_class.return_value = mock_cleaning_service
+        mock_schema_utils_class.return_value = mock_schema_utils
+        mock_dao_class.return_value = Mock()
         mock_time.side_effect = [0.0, 0.05]
         mock_cleaning_service.raw_data_dao.get_by_id.return_value = sample_raw_data
-        mock_cleaning_service.validate_cleaned_content.return_value = (False, {"error": "validation failed"})
+        mock_schema_utils.validate_content.return_value = (False, {"error": "validation failed"})
 
         cleaner = ConcreteCleaner("test_cleaner", "1.0.0")
         result = cleaner.clean_single_record(1)
@@ -195,22 +243,27 @@ class TestCleanSingleRecord:
         assert call_args[1]["validation_error"] == {"error": "validation failed"}
 
     @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
+    @patch("epochai.data_processing.cleaners.base_cleaner.SchemaUtils")
+    @patch("epochai.common.database.dao.cleaned_data_metadata_schemas_dao.CleanedDataMetadataSchemasDAO")
     @patch("epochai.data_processing.cleaners.base_cleaner.time.time")
     def test_clean_single_record_exception_handling(
         self,
         mock_time,
+        mock_dao_class,
+        mock_schema_utils_class,
         mock_service_class,
         mock_cleaning_service,
+        mock_schema_utils,
         sample_raw_data,
     ):
         mock_service_class.return_value = mock_cleaning_service
-        mock_time.side_effect = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5]
+        mock_schema_utils_class.return_value = mock_schema_utils
+        mock_dao_class.return_value = Mock()
+        mock_time.side_effect = [0.0, 0.1, 0.2, 0.3, 0.4]
         mock_cleaning_service.raw_data_dao.get_by_id.return_value = sample_raw_data
-        mock_cleaning_service.get_metadata_schema_id.return_value = 1
 
         cleaner = FailingCleaner("failing_cleaner", "1.0.0")
-        with patch.object(cleaner, "clean_content", side_effect=ValueError("Test cleaning error")):
-            result = cleaner.clean_single_record(1)
+        result = cleaner.clean_single_record(1)
 
         assert result is None
         mock_cleaning_service.save_error_record.assert_called_once()
@@ -222,8 +275,19 @@ class TestCleanSingleRecord:
 
 class TestCleanMultipleRecords:
     @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_clean_multiple_records_success(self, mock_service_class, mock_cleaning_service):
+    @patch("epochai.data_processing.cleaners.base_cleaner.SchemaUtils")
+    @patch("epochai.common.database.dao.cleaned_data_metadata_schemas_dao.CleanedDataMetadataSchemasDAO")
+    def test_clean_multiple_records_success(
+        self,
+        mock_dao_class,
+        mock_schema_utils_class,
+        mock_service_class,
+        mock_cleaning_service,
+        mock_schema_utils,
+    ):
         mock_service_class.return_value = mock_cleaning_service
+        mock_schema_utils_class.return_value = mock_schema_utils
+        mock_dao_class.return_value = Mock()
 
         cleaner = ConcreteCleaner("test_cleaner", "1.0.0")
 
@@ -247,8 +311,19 @@ class TestCleanMultipleRecords:
         assert "average_time_per_record" in result
 
     @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_clean_multiple_records_mixed_results(self, mock_service_class, mock_cleaning_service):
+    @patch("epochai.data_processing.cleaners.base_cleaner.SchemaUtils")
+    @patch("epochai.common.database.dao.cleaned_data_metadata_schemas_dao.CleanedDataMetadataSchemasDAO")
+    def test_clean_multiple_records_mixed_results(
+        self,
+        mock_dao_class,
+        mock_schema_utils_class,
+        mock_service_class,
+        mock_cleaning_service,
+        mock_schema_utils,
+    ):
         mock_service_class.return_value = mock_cleaning_service
+        mock_schema_utils_class.return_value = mock_schema_utils
+        mock_dao_class.return_value = Mock()
 
         cleaner = ConcreteCleaner("test_cleaner", "1.0.0")
 
@@ -261,8 +336,19 @@ class TestCleanMultipleRecords:
         assert result["error_ids"] == [2]
 
     @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_clean_multiple_records_empty_list(self, mock_service_class, mock_cleaning_service):
+    @patch("epochai.data_processing.cleaners.base_cleaner.SchemaUtils")
+    @patch("epochai.common.database.dao.cleaned_data_metadata_schemas_dao.CleanedDataMetadataSchemasDAO")
+    def test_clean_multiple_records_empty_list(
+        self,
+        mock_dao_class,
+        mock_schema_utils_class,
+        mock_service_class,
+        mock_cleaning_service,
+        mock_schema_utils,
+    ):
         mock_service_class.return_value = mock_cleaning_service
+        mock_schema_utils_class.return_value = mock_schema_utils
+        mock_dao_class.return_value = Mock()
 
         cleaner = ConcreteCleaner("test_cleaner", "1.0.0")
         result = cleaner.clean_multiple_records([])
@@ -280,8 +366,19 @@ class TestCleanMultipleRecords:
         assert result["error_ids"] == expected_result["error_ids"]
 
     @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_clean_multiple_records_exception_handling(self, mock_service_class, mock_cleaning_service):
+    @patch("epochai.data_processing.cleaners.base_cleaner.SchemaUtils")
+    @patch("epochai.common.database.dao.cleaned_data_metadata_schemas_dao.CleanedDataMetadataSchemasDAO")
+    def test_clean_multiple_records_exception_handling(
+        self,
+        mock_dao_class,
+        mock_schema_utils_class,
+        mock_service_class,
+        mock_cleaning_service,
+        mock_schema_utils,
+    ):
         mock_service_class.return_value = mock_cleaning_service
+        mock_schema_utils_class.return_value = mock_schema_utils
+        mock_dao_class.return_value = Mock()
 
         cleaner = ConcreteCleaner("test_cleaner", "1.0.0")
 
@@ -300,13 +397,20 @@ class TestCleanMultipleRecords:
 
 class TestCleanByValidationStatus:
     @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
+    @patch("epochai.data_processing.cleaners.base_cleaner.SchemaUtils")
+    @patch("epochai.common.database.dao.cleaned_data_metadata_schemas_dao.CleanedDataMetadataSchemasDAO")
     def test_clean_by_validation_status_success(
         self,
+        mock_dao_class,
+        mock_schema_utils_class,
         mock_service_class,
         mock_cleaning_service,
+        mock_schema_utils,
         multiple_raw_data,
     ):
         mock_service_class.return_value = mock_cleaning_service
+        mock_schema_utils_class.return_value = mock_schema_utils
+        mock_dao_class.return_value = Mock()
         mock_cleaning_service.raw_data_dao.get_by_validation_status.return_value = multiple_raw_data
 
         cleaner = ConcreteCleaner("test_cleaner", "1.0.0")
@@ -323,8 +427,19 @@ class TestCleanByValidationStatus:
         assert result == {"success_count": 3}
 
     @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_clean_by_validation_status_no_records(self, mock_service_class, mock_cleaning_service):
+    @patch("epochai.data_processing.cleaners.base_cleaner.SchemaUtils")
+    @patch("epochai.common.database.dao.cleaned_data_metadata_schemas_dao.CleanedDataMetadataSchemasDAO")
+    def test_clean_by_validation_status_no_records(
+        self,
+        mock_dao_class,
+        mock_schema_utils_class,
+        mock_service_class,
+        mock_cleaning_service,
+        mock_schema_utils,
+    ):
         mock_service_class.return_value = mock_cleaning_service
+        mock_schema_utils_class.return_value = mock_schema_utils
+        mock_dao_class.return_value = Mock()
         mock_cleaning_service.raw_data_dao.get_by_validation_status.return_value = []
 
         cleaner = ConcreteCleaner("test_cleaner", "1.0.0")
@@ -342,8 +457,20 @@ class TestCleanByValidationStatus:
 
 class TestCleanRecentData:
     @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_clean_recent_data_success(self, mock_service_class, mock_cleaning_service, multiple_raw_data):
+    @patch("epochai.data_processing.cleaners.base_cleaner.SchemaUtils")
+    @patch("epochai.common.database.dao.cleaned_data_metadata_schemas_dao.CleanedDataMetadataSchemasDAO")
+    def test_clean_recent_data_success(
+        self,
+        mock_dao_class,
+        mock_schema_utils_class,
+        mock_service_class,
+        mock_cleaning_service,
+        mock_schema_utils,
+        multiple_raw_data,
+    ):
         mock_service_class.return_value = mock_cleaning_service
+        mock_schema_utils_class.return_value = mock_schema_utils
+        mock_dao_class.return_value = Mock()
         mock_cleaning_service.raw_data_dao.get_recent_contents.return_value = multiple_raw_data
 
         cleaner = ConcreteCleaner("test_cleaner", "1.0.0")
@@ -360,8 +487,19 @@ class TestCleanRecentData:
         assert result == {"success_count": 3}
 
     @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_clean_recent_data_no_records(self, mock_service_class, mock_cleaning_service):
+    @patch("epochai.data_processing.cleaners.base_cleaner.SchemaUtils")
+    @patch("epochai.common.database.dao.cleaned_data_metadata_schemas_dao.CleanedDataMetadataSchemasDAO")
+    def test_clean_recent_data_no_records(
+        self,
+        mock_dao_class,
+        mock_schema_utils_class,
+        mock_service_class,
+        mock_cleaning_service,
+        mock_schema_utils,
+    ):
         mock_service_class.return_value = mock_cleaning_service
+        mock_schema_utils_class.return_value = mock_schema_utils
+        mock_dao_class.return_value = Mock()
         mock_cleaning_service.raw_data_dao.get_recent_contents.return_value = []
 
         cleaner = ConcreteCleaner("test_cleaner", "1.0.0")
@@ -379,13 +517,20 @@ class TestCleanRecentData:
 
 class TestGetCleaningStatistics:
     @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
+    @patch("epochai.data_processing.cleaners.base_cleaner.SchemaUtils")
+    @patch("epochai.common.database.dao.cleaned_data_metadata_schemas_dao.CleanedDataMetadataSchemasDAO")
     def test_get_cleaning_statistics_success(
         self,
+        mock_dao_class,
+        mock_schema_utils_class,
         mock_service_class,
         mock_cleaning_service,
+        mock_schema_utils,
         cleaned_data_records,
     ):
         mock_service_class.return_value = mock_cleaning_service
+        mock_schema_utils_class.return_value = mock_schema_utils
+        mock_dao_class.return_value = Mock()
         mock_cleaning_service.cleaned_data_dao.get_by_cleaner.return_value = cleaned_data_records
         mock_cleaning_service.get_validation_status_id.return_value = 1
 
@@ -410,8 +555,19 @@ class TestGetCleaningStatistics:
         mock_cleaning_service.cleaned_data_dao.get_by_cleaner.assert_called_once_with("test_cleaner", "1.0.0")
 
     @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_get_cleaning_statistics_no_records(self, mock_service_class, mock_cleaning_service):
+    @patch("epochai.data_processing.cleaners.base_cleaner.SchemaUtils")
+    @patch("epochai.common.database.dao.cleaned_data_metadata_schemas_dao.CleanedDataMetadataSchemasDAO")
+    def test_get_cleaning_statistics_no_records(
+        self,
+        mock_dao_class,
+        mock_schema_utils_class,
+        mock_service_class,
+        mock_cleaning_service,
+        mock_schema_utils,
+    ):
         mock_service_class.return_value = mock_cleaning_service
+        mock_schema_utils_class.return_value = mock_schema_utils
+        mock_dao_class.return_value = Mock()
         mock_cleaning_service.cleaned_data_dao.get_by_cleaner.return_value = []
 
         cleaner = ConcreteCleaner("test_cleaner", "1.0.0")
@@ -426,8 +582,19 @@ class TestGetCleaningStatistics:
         assert result == expected_stats
 
     @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_get_cleaning_statistics_exception(self, mock_service_class, mock_cleaning_service):
+    @patch("epochai.data_processing.cleaners.base_cleaner.SchemaUtils")
+    @patch("epochai.common.database.dao.cleaned_data_metadata_schemas_dao.CleanedDataMetadataSchemasDAO")
+    def test_get_cleaning_statistics_exception(
+        self,
+        mock_dao_class,
+        mock_schema_utils_class,
+        mock_service_class,
+        mock_cleaning_service,
+        mock_schema_utils,
+    ):
         mock_service_class.return_value = mock_cleaning_service
+        mock_schema_utils_class.return_value = mock_schema_utils
+        mock_dao_class.return_value = Mock()
         mock_cleaning_service.cleaned_data_dao.get_by_cleaner.side_effect = Exception("Database error")
 
         cleaner = ConcreteCleaner("test_cleaner", "1.0.0")
@@ -442,53 +609,24 @@ class TestGetCleaningStatistics:
         assert result == expected_result
 
 
-class TestSchemaManagement:
-    @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_reload_schema_from_database_success(self, mock_service_class, mock_cleaning_service):
-        mock_service_class.return_value = mock_cleaning_service
-        mock_cleaning_service.reload_schema_from_database.return_value = True
-
-        cleaner = ConcreteCleaner("test_cleaner", "1.0.0")
-        result = cleaner.reload_schema_from_database()
-
-        assert result is True
-        mock_cleaning_service.reload_schema_from_database.assert_called_once()
-
-    @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_get_schema_info(self, mock_service_class, mock_cleaning_service):
-        mock_service_class.return_value = mock_cleaning_service
-        expected_info = {"schema_cached": True, "schema_id": 1}
-        mock_cleaning_service.get_schema_info.return_value = expected_info
-
-        cleaner = ConcreteCleaner("test_cleaner", "1.0.0")
-        result = cleaner.get_schema_info()
-
-        assert result == expected_info
-        mock_cleaning_service.get_schema_info.assert_called_once()
-
-    @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_get_metadata_schema_id(self, mock_service_class, mock_cleaning_service):
-        mock_service_class.return_value = mock_cleaning_service
-        mock_cleaning_service.get_metadata_schema_id.return_value = 42
-
-        cleaner = ConcreteCleaner("test_cleaner", "1.0.0")
-        result = cleaner.get_metadata_schema_id()
-
-        assert result == 42
-        mock_cleaning_service.get_metadata_schema_id.assert_called_once()
-
-
 class TestCleanSingleRecordTiming:
     @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
+    @patch("epochai.data_processing.cleaners.base_cleaner.SchemaUtils")
+    @patch("epochai.common.database.dao.cleaned_data_metadata_schemas_dao.CleanedDataMetadataSchemasDAO")
     @patch("epochai.data_processing.cleaners.base_cleaner.time.time")
     def test_cleaning_time_calculation(
         self,
         mock_time,
+        mock_dao_class,
+        mock_schema_utils_class,
         mock_service_class,
         mock_cleaning_service,
+        mock_schema_utils,
         sample_raw_data,
     ):
         mock_service_class.return_value = mock_cleaning_service
+        mock_schema_utils_class.return_value = mock_schema_utils
+        mock_dao_class.return_value = Mock()
         mock_time.side_effect = [0.0, 0.234]
         mock_cleaning_service.raw_data_dao.get_by_id.return_value = sample_raw_data
 
@@ -499,15 +637,23 @@ class TestCleanSingleRecordTiming:
         assert call_args[1]["cleaning_time_ms"] == 234
 
     @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
+    @patch("epochai.data_processing.cleaners.base_cleaner.SchemaUtils")
+    @patch("epochai.common.database.dao.cleaned_data_metadata_schemas_dao.CleanedDataMetadataSchemasDAO")
     @patch("epochai.data_processing.cleaners.base_cleaner.time.time")
     def test_exception_timing_calculation(
         self,
         mock_time,
+        mock_dao_class,
+        mock_schema_utils_class,
         mock_service_class,
         mock_cleaning_service,
+        mock_schema_utils,
         sample_raw_data,
     ):
         mock_service_class.return_value = mock_cleaning_service
+        mock_schema_utils_class.return_value = mock_schema_utils
+        mock_dao_class.return_value = Mock()
+
         mock_time.side_effect = [0.0, 0.156, 0.2, 0.3, 0.4, 0.5]
         mock_cleaning_service.raw_data_dao.get_by_id.return_value = sample_raw_data
 
@@ -520,13 +666,20 @@ class TestCleanSingleRecordTiming:
 
 class TestExistingCleanedDataCheck:
     @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
+    @patch("epochai.data_processing.cleaners.base_cleaner.SchemaUtils")
+    @patch("epochai.common.database.dao.cleaned_data_metadata_schemas_dao.CleanedDataMetadataSchemasDAO")
     def test_different_cleaner_version_processes_again(
         self,
+        mock_dao_class,
+        mock_schema_utils_class,
         mock_service_class,
         mock_cleaning_service,
+        mock_schema_utils,
         sample_raw_data,
     ):
         mock_service_class.return_value = mock_cleaning_service
+        mock_schema_utils_class.return_value = mock_schema_utils
+        mock_dao_class.return_value = Mock()
         mock_cleaning_service.raw_data_dao.get_by_id.return_value = sample_raw_data
 
         existing_cleaned = CleanedData(
@@ -543,13 +696,20 @@ class TestExistingCleanedDataCheck:
         mock_cleaning_service.save_cleaned_content.assert_called_once()
 
     @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
+    @patch("epochai.data_processing.cleaners.base_cleaner.SchemaUtils")
+    @patch("epochai.common.database.dao.cleaned_data_metadata_schemas_dao.CleanedDataMetadataSchemasDAO")
     def test_different_cleaner_name_processes_again(
         self,
+        mock_dao_class,
+        mock_schema_utils_class,
         mock_service_class,
         mock_cleaning_service,
+        mock_schema_utils,
         sample_raw_data,
     ):
         mock_service_class.return_value = mock_cleaning_service
+        mock_schema_utils_class.return_value = mock_schema_utils
+        mock_dao_class.return_value = Mock()
         mock_cleaning_service.raw_data_dao.get_by_id.return_value = sample_raw_data
 
         existing_cleaned = CleanedData(

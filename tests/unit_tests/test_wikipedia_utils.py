@@ -109,7 +109,7 @@ class TestGetWikipediaPage:
         mock_page.return_value = mock_wiki_page
 
         with patch.object(wiki_utils, "switch_language", return_value=True):
-            result = wiki_utils.get_wikipedia_page("Test Page", "en")
+            result = wiki_utils.get_page("Test Page", "en")
 
         assert result == mock_wiki_page
         mock_page.assert_called_once_with("Test Page")
@@ -117,7 +117,7 @@ class TestGetWikipediaPage:
     @patch("epochai.common.utils.wikipedia_utils.wikipedia.page")
     def test_get_page_language_switch_failure(self, mock_page, wiki_utils):
         with patch.object(wiki_utils, "switch_language", return_value=False):
-            result = wiki_utils.get_wikipedia_page("Test Page", "invalid")
+            result = wiki_utils.get_page("Test Page", "invalid")
 
         assert result is None
         mock_page.assert_not_called()
@@ -135,7 +135,7 @@ class TestGetWikipediaPage:
             "handle_any_disambiguation_error",
             return_value=Mock(),
         ) as mock_handle:
-            result = wiki_utils.get_wikipedia_page("Test Page", "en")
+            result = wiki_utils.get_page("Test Page", "en")
 
             mock_handle.assert_called_once_with("Test Page", ["Option 1", "Option 2"], "en")
             assert result is not None
@@ -149,7 +149,7 @@ class TestGetWikipediaPage:
             "_try_search_results_fallback",
             return_value=Mock(),
         ) as mock_fallback:
-            result = wiki_utils.get_wikipedia_page("Nonexistent Page", "en")
+            result = wiki_utils.get_page("Nonexistent Page", "en")
 
             mock_fallback.assert_called_once_with("Nonexistent Page", "en")
             assert result is not None
@@ -167,7 +167,7 @@ class TestGetWikipediaMetadata:
         mock_page.links = ["Link 1", "Link 2"]
         mock_page.pageid = 12345
 
-        with patch.object(wiki_utils, "get_wikipedia_page", return_value=mock_page), patch(
+        with patch.object(wiki_utils, "get_page", return_value=mock_page), patch(
             "epochai.common.utils.wikipedia_utils.datetime",
         ) as mock_datetime:
             mock_datetime.now.return_value.isoformat.return_value = "2023-01-01T12:00:00"
@@ -202,7 +202,7 @@ class TestGetWikipediaMetadata:
 
         extra_data = {"politician_name": "John Doe", "custom_field": "custom_value"}
 
-        with patch.object(wiki_utils, "get_wikipedia_page", return_value=mock_page), patch(
+        with patch.object(wiki_utils, "get_page", return_value=mock_page), patch(
             "epochai.common.utils.wikipedia_utils.datetime",
         ) as mock_datetime:
             mock_datetime.now.return_value.isoformat.return_value = "2023-01-01T12:00:00"
@@ -214,7 +214,7 @@ class TestGetWikipediaMetadata:
         assert result["title"] == "Test Page"
 
     def test_get_metadata_page_not_found(self, wiki_utils):
-        with patch.object(wiki_utils, "get_wikipedia_page", return_value=None):
+        with patch.object(wiki_utils, "get_page", return_value=None):
             result = wiki_utils.get_wikipedia_metadata("Nonexistent Page", "en")
 
         assert result is None
@@ -233,7 +233,7 @@ class TestGetWikipediaMetadata:
         # First two calls raise exceptions, third succeeds
         with patch.object(
             wiki_utils,
-            "get_wikipedia_page",
+            "get_page",
             side_effect=[Exception("Error 1"), Exception("Error 2"), mock_page],
         ), patch("epochai.common.utils.wikipedia_utils.datetime") as mock_datetime:
             mock_datetime.now.return_value.isoformat.return_value = "2023-01-01T12:00:00"
@@ -249,12 +249,12 @@ class TestGetWikipediaMetadata:
 class TestProcessItemsByLanguage:
     def test_process_items_success(self, wiki_utils):
         items_by_language = {
-            "en": ["Item 1", "Item 2"],
-            "es": ["Item 3"],
+            "en": {"Item 1": 1, "Item 2": 2},
+            "es": {"Item 3": 3},
         }
 
-        def mock_process_func(item, language_code):
-            return f"processed_{item}_{language_code}"
+        def mock_process_func(item, language_code, collection_target_id):
+            return f"processed_{item}_{language_code}_{collection_target_id}"
 
         with patch.object(wiki_utils, "switch_language", return_value=True), patch(
             "epochai.common.utils.wikipedia_utils.time.sleep",
@@ -262,27 +262,27 @@ class TestProcessItemsByLanguage:
             results = wiki_utils.process_items_by_language(items_by_language, mock_process_func)
 
         expected = {
-            "en": ["processed_Item 1_en", "processed_Item 2_en"],
-            "es": ["processed_Item 3_es"],
+            "en": ["processed_Item 1_en_1", "processed_Item 2_en_2"],
+            "es": ["processed_Item 3_es_3"],
         }
 
         assert results == expected
 
     def test_process_items_empty_language(self, wiki_utils):
         items_by_language = {
-            "en": ["Item 1"],
-            "es": [],  # Empty list
+            "en": {"Item 1": 1},
+            "es": {},  # Empty dict instead of empty list
         }
 
-        def mock_process_func(item, language_code):
-            return f"processed_{item}_{language_code}"
+        def mock_process_func(item, language_code, collection_target_id):
+            return f"processed_{item}_{language_code}_{collection_target_id}"
 
         with patch.object(wiki_utils, "switch_language", return_value=True), patch(
             "epochai.common.utils.wikipedia_utils.time.sleep",
         ):
             results = wiki_utils.process_items_by_language(items_by_language, mock_process_func)
 
-        assert results == {"en": ["processed_Item 1_en"]}
+        assert results == {"en": ["processed_Item 1_en_1"]}
         # 'es' key should not exist since there were no items
 
     def test_process_items_language_switch_failure(self, wiki_utils):
@@ -297,11 +297,11 @@ class TestProcessItemsByLanguage:
         assert results == {"invalid": []}
 
     def test_process_items_with_none_results(self, wiki_utils):
-        items_by_language = {"en": ["Item 1", "Item 2"]}
+        items_by_language = {"en": {"Item 1": 1, "Item 2": 2}}
 
-        def mock_process_func(item, language_code):
+        def mock_process_func(item, language_code, collection_target_id):
             # Return None for Item 1, success for Item 2
-            return f"processed_{item}_{language_code}" if item == "Item 2" else None
+            return f"processed_{item}_{language_code}_{collection_target_id}" if item == "Item 2" else None
 
         with patch.object(wiki_utils, "switch_language", return_value=True), patch(
             "epochai.common.utils.wikipedia_utils.time.sleep",
@@ -309,7 +309,7 @@ class TestProcessItemsByLanguage:
             results = wiki_utils.process_items_by_language(items_by_language, mock_process_func)
 
         # Only successful results should be included
-        assert results == {"en": ["processed_Item 2_en"]}
+        assert results == {"en": ["processed_Item 2_en_2"]}
 
 
 class TestHandleDisambiguationError:
