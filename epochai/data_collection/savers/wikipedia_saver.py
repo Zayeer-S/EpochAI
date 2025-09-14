@@ -16,13 +16,6 @@ class WikipediaSaver(BaseSaver):
         self._min_content_length = self._data_config.get("data_validator").get("min_content_length")
         self._required_fields = self._data_config.get("data_validator").get("required_fields_wikipedia")
 
-    @handle_generic_errors_gracefully("while getting custom validation function", None)
-    def _get_custom_validation_function(
-        self,
-    ) -> Any:
-        """Returns a custom validation function for Wikipedia data"""
-        return self.wikipedia_validation_function
-
     @handle_generic_errors_gracefully("while preparing metadata for storage", {})
     def _prepare_metadata_for_storage(
         self,
