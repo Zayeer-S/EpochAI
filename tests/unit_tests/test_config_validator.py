@@ -3,15 +3,20 @@ from unittest.mock import patch
 import pytest
 
 from epochai.common.config.config_validator import (
+    CleanersConfig,
     ConfigValidator,
     DatabaseConfig,
     DataOutputConfig,
     DataSettings,
     DataValidatorConfig,
+    DefaultsConfig,
     LoggingConfig,
     ValidateWholeConfig,
     WikipediaApiConfig,
+    WikipediaCleanerConfig,
     WikipediaConfig,
+    WikipediaDefaultApiConfig,
+    WikipediaDefaultConfig,
 )
 
 
@@ -282,7 +287,6 @@ class TestWikipediaApiConfig:
         mock_constraints.return_value = sample_constraints
 
         config = WikipediaApiConfig(
-            collector_name="test_collector",
             language=["en", "fr"],
             rate_limit_delay=1.0,
             max_retries=5,
@@ -291,7 +295,6 @@ class TestWikipediaApiConfig:
             recursive_limit=2,
         )
 
-        assert config.collector_name == "test_collector"
         assert config.language == ["en", "fr"]
         assert config.rate_limit_delay == 1.0
 
@@ -304,7 +307,6 @@ class TestWikipediaApiConfig:
             match="rate_limit_delay is currently '0.1', must be: rate_limit_delay >= 0.2",
         ):
             WikipediaApiConfig(
-                collector_name="test_collector",
                 language=["en"],
                 rate_limit_delay=0.1,
                 max_retries=5,
@@ -320,7 +322,6 @@ class TestWikipediaApiConfig:
         # Test too small
         with pytest.raises(ValueError, match="max_retries is currently '0', must be: 1 <= max_retries <= 10"):
             WikipediaApiConfig(
-                collector_name="test_collector",
                 language=["en"],
                 rate_limit_delay=0.5,
                 max_retries=0,
@@ -335,7 +336,6 @@ class TestWikipediaApiConfig:
             match="max_retries is currently '15', must be: 1 <= max_retries <= 10",
         ):
             WikipediaApiConfig(
-                collector_name="test_collector",
                 language=["en"],
                 rate_limit_delay=0.5,
                 max_retries=15,
@@ -353,7 +353,6 @@ class TestWikipediaApiConfig:
             match="search_max_results is currently '15', must be: search_max_results <= 10",
         ):
             WikipediaApiConfig(
-                collector_name="test_collector",
                 language=["en"],
                 rate_limit_delay=0.5,
                 max_retries=5,
@@ -371,7 +370,6 @@ class TestWikipediaApiConfig:
             match="request_timeout is currently '3', must be: request_timeout >= 5",
         ):
             WikipediaApiConfig(
-                collector_name="test_collector",
                 language=["en"],
                 rate_limit_delay=0.5,
                 max_retries=5,
@@ -390,7 +388,6 @@ class TestWikipediaApiConfig:
             match="Current recursive_limit is currently '0' but must be: 1 <= recursive_limit <= 3",
         ):
             WikipediaApiConfig(
-                collector_name="test_collector",
                 language=["en"],
                 rate_limit_delay=0.5,
                 max_retries=5,
@@ -408,7 +405,6 @@ class TestWikipediaApiConfig:
             match="recursive_limit is currently '5' which is greater than max: 3. Just use iteration at this point.",
         ):
             WikipediaApiConfig(
-                collector_name="test_collector",
                 language=["en"],
                 rate_limit_delay=0.5,
                 max_retries=5,
@@ -423,7 +419,6 @@ class TestWikipediaApiConfig:
 
         # Test minimum boundary values
         config_min = WikipediaApiConfig(
-            collector_name="test_collector",
             language=["en"],
             rate_limit_delay=0.2,
             max_retries=1,
@@ -439,7 +434,6 @@ class TestWikipediaApiConfig:
 
         # Test maximum boundary values
         config_max = WikipediaApiConfig(
-            collector_name="test_collector",
             language=["en"],
             rate_limit_delay=5.0,
             max_retries=10,
@@ -459,7 +453,6 @@ class TestWikipediaConfig:
         mock_constraints.return_value = sample_constraints
 
         api_config = WikipediaApiConfig(
-            collector_name="test_collector",
             language=["en", "fr"],
             rate_limit_delay=1.0,
             max_retries=5,
@@ -470,7 +463,6 @@ class TestWikipediaConfig:
 
         config = WikipediaConfig(api=api_config)
 
-        assert config.api.collector_name == "test_collector"
         assert config.api.language == ["en", "fr"]
 
 
@@ -494,14 +486,22 @@ class TestDataSettings:
             utf8_corruption_patterns=["Ã©"],
             required_fields_wikipedia={"title", "content"},
         )
+        cleaners_config = CleanersConfig(
+            wikipedia=WikipediaCleanerConfig(
+                cleaner_name="wikipedia_cleaner",
+                current_schema_version="1.0.0",
+            ),
+        )
 
         config = DataSettings(
             data_output=data_output_config,
             data_validator=data_validator_config,
+            cleaners=cleaners_config,
         )
 
         assert config.data_output.directory == "data/raw"
         assert config.data_validator.min_content_length == 50
+        assert config.cleaners.wikipedia.cleaner_name == "wikipedia_cleaner"
 
 
 class TestValidateWholeConfig:
@@ -525,9 +525,16 @@ class TestValidateWholeConfig:
             utf8_corruption_patterns=["Ã©"],
             required_fields_wikipedia={"title", "content"},
         )
+        cleaners_config = CleanersConfig(
+            wikipedia=WikipediaCleanerConfig(
+                cleaner_name="wikipedia_cleaner",
+                current_schema_version="1.0.0",
+            ),
+        )
         data_settings = DataSettings(
             data_output=data_output_config,
             data_validator=data_validator_config,
+            cleaners=cleaners_config,
         )
 
         logging_config = LoggingConfig(
@@ -537,7 +544,6 @@ class TestValidateWholeConfig:
         )
 
         api_config = WikipediaApiConfig(
-            collector_name="test_collector",
             language=["en"],
             rate_limit_delay=1.0,
             max_retries=5,
@@ -547,16 +553,33 @@ class TestValidateWholeConfig:
         )
         wikipedia_config = WikipediaConfig(api=api_config)
 
+        defaults_config = DefaultsConfig(
+            wikipedia=WikipediaDefaultConfig(
+                collector_name="wikipedia_collector",
+                current_schema_version="1.0.0",
+                api=WikipediaDefaultApiConfig(
+                    language=["en"],
+                    rate_limit_delay=2.0,
+                    max_retries=3,
+                    search_max_results=5,
+                    request_timeout=30,
+                    recursive_limit=1,
+                ),
+            ),
+        )
+
         # Test the complete validation
         config = ValidateWholeConfig(
             data_settings=data_settings,
             logging=logging_config,
             wikipedia=wikipedia_config,
+            defaults=defaults_config,
         )
 
         assert config.data_settings.data_output.directory == "data/raw"
         assert config.logging.level == "INFO"
-        assert config.wikipedia.api.collector_name == "test_collector"
+        assert config.wikipedia.api.language == ["en"]
+        assert config.defaults.wikipedia.collector_name == "wikipedia_collector"
 
     @patch("epochai.common.config.config_validator.ConfigValidator.get_constraints_config")
     def test_validate_whole_config_via_class_method(self, mock_constraints, sample_constraints):
@@ -581,6 +604,12 @@ class TestValidateWholeConfig:
                     "utf8_corruption_patterns": ["Ã©"],
                     "required_fields_wikipedia": {"title", "content"},
                 },
+                "cleaners": {
+                    "wikipedia": {
+                        "cleaner_name": "wikipedia_cleaner",
+                        "current_schema_version": "1.0.0",
+                    },
+                },
             },
             "logging": {
                 "level": "INFO",
@@ -589,13 +618,26 @@ class TestValidateWholeConfig:
             },
             "wikipedia": {
                 "api": {
-                    "collector_name": "test_collector",
                     "language": ["en"],
                     "rate_limit_delay": 1.0,
                     "max_retries": 5,
                     "search_max_results": 10,
                     "request_timeout": 30,
                     "recursive_limit": 2,
+                },
+            },
+            "defaults": {
+                "wikipedia": {
+                    "collector_name": "wikipedia_collector",
+                    "current_schema_version": "1.0.0",
+                    "api": {
+                        "language": ["en"],
+                        "rate_limit_delay": 2.0,
+                        "max_retries": 3,
+                        "search_max_results": 5,
+                        "request_timeout": 30,
+                        "recursive_limit": 1,
+                    },
                 },
             },
         }
@@ -605,7 +647,8 @@ class TestValidateWholeConfig:
         assert isinstance(result, ValidateWholeConfig)
         assert result.data_settings.data_output.directory == "data/raw"
         assert result.logging.level == "INFO"
-        assert result.wikipedia.api.collector_name == "test_collector"
+        assert result.wikipedia.api.language == ["en"]
+        assert result.defaults.wikipedia.collector_name == "wikipedia_collector"
 
     @patch("epochai.common.config.config_validator.ConfigValidator.get_constraints_config")
     def test_validate_whole_config_missing_field(self, mock_constraints, sample_constraints):
@@ -646,6 +689,12 @@ class TestValidateWholeConfig:
                     "utf8_corruption_patterns": ["Ã©"],
                     "required_fields_wikipedia": {"title", "content"},
                 },
+                "cleaners": {
+                    "wikipedia": {
+                        "cleaner_name": "wikipedia_cleaner",
+                        "current_schema_version": "1.0.0",
+                    },
+                },
             },
             "logging": {
                 "level": "INFO",
@@ -654,13 +703,26 @@ class TestValidateWholeConfig:
             },
             "wikipedia": {
                 "api": {
-                    "collector_name": "test_collector",
                     "language": ["en"],
                     "rate_limit_delay": 1.0,
                     "max_retries": 5,
                     "search_max_results": 10,
                     "request_timeout": 30,
                     "recursive_limit": 2,
+                },
+            },
+            "defaults": {
+                "wikipedia": {
+                    "collector_name": "wikipedia_collector",
+                    "current_schema_version": "1.0.0",
+                    "api": {
+                        "language": ["en"],
+                        "rate_limit_delay": 2.0,
+                        "max_retries": 3,
+                        "search_max_results": 5,
+                        "request_timeout": 30,
+                        "recursive_limit": 1,
+                    },
                 },
             },
         }

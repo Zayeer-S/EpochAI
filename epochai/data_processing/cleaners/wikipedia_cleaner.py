@@ -13,7 +13,7 @@ class WikipediaCleaner(BaseCleaner):
 
         super().__init__(
             cleaner_name=self.config.get("cleaners").get("wikipedia").get("cleaner_name"),
-            cleaner_version=self.config.get("cleaners").get("wikipedia").get("current_version"),
+            cleaner_version=self.config.get("cleaners").get("wikipedia").get("current_schema_version"),
         )
 
         self._multiple_whitespace_pattern = re.compile(r"[ \t]+")

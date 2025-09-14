@@ -79,75 +79,83 @@ class DataValidatorConfig(BaseModel):
         error_logging_limit = data_validator_constraints.get("error_logging_limit")
         if not (self.error_logging_limit >= error_logging_limit):
             raise ValueError(
-                f"error_logging_limit currently '{self.error_logging_limit}', must be: error_logging_limit >= {error_logging_limit}"  # noqa
+                f"error_logging_limit currently '{self.error_logging_limit}', must be: error_logging_limit >= {error_logging_limit}",  # noqa
             )
 
         return self
 
 
-class CleanerConfig(BaseModel):
+class WikipediaCleanerConfig(BaseModel):
     cleaner_name: str
     current_schema_version: str
 
-    @model_validator(mode="after")
-    def validate_using_constraints(self):
-        constraints_config = ConfigValidator.get_constraints_config()
-
-        cleaner_constraints = constraints_config.get("cleaners", {})
-
-        allowed_cleaner_names = cleaner_constraints.get("allowed_cleaner_names", [])
-        if allowed_cleaner_names and self.cleaner_name not in allowed_cleaner_names:
-            raise ValueError(
-                f"cleaner_name currently '{self.cleaner_name}', must be one of: {allowed_cleaner_names}",
-            )
-
-        schema_version_pattern = cleaner_constraints.get("schema_version_pattern")
-        if schema_version_pattern:
-            import re
-
-            if not re.match(schema_version_pattern, self.current_schema_version):
-                raise ValueError(
-                    f"current_schema_version '{self.current_schema_version}' does not match required pattern: {schema_version_pattern}",  # noqa
-                )
-
-        return self
-
 
 class CleanersConfig(BaseModel):
-    wikipedia: CleanerConfig
+    wikipedia: WikipediaCleanerConfig
 
 
-class DefaultCollectorConfig(BaseModel):
-    collector_name: str
-    current_schema_version: str
-    api: "WikipediaApiConfig"
+class WikipediaDefaultApiConfig(BaseModel):
+    language: List[str]
+    rate_limit_delay: float
+    max_retries: int
+    search_max_results: int
+    request_timeout: int
+    recursive_limit: int
 
     @model_validator(mode="after")
     def validate_using_constraints(self):
         constraints_config = ConfigValidator.get_constraints_config()
 
-        defaults_constraints = constraints_config.get("defaults", {})
+        wikipedia_constraints = constraints_config.get("wikipedia", {})
+        api_constraints = wikipedia_constraints.get("api", {})
 
-        allowed_collector_names = defaults_constraints.get("allowed_collector_names", [])
-        if allowed_collector_names and self.collector_name not in allowed_collector_names:
+        min_rate_limit_delay = api_constraints.get("min_rate_limit_delay")
+        if self.rate_limit_delay < min_rate_limit_delay:
             raise ValueError(
-                f"collector_name currently '{self.collector_name}', must be one of: {allowed_collector_names}",
+                f"rate_limit_delay is currently '{self.rate_limit_delay}', must be: rate_limit_delay >= {min_rate_limit_delay}",
             )
 
-        schema_version_pattern = defaults_constraints.get("schema_version_pattern")
-        if schema_version_pattern:
-            import re
+        min_retries = api_constraints.get("min_retries")
+        max_retries = api_constraints.get("max_retries")
+        if not (min_retries <= self.max_retries <= max_retries):
+            raise ValueError(
+                f"max_retries is currently '{self.max_retries}', must be: {min_retries} <= max_retries <= {max_retries}",
+            )
 
-            if not re.match(schema_version_pattern, self.current_schema_version):
+        search_max_results = api_constraints.get("search_max_results")
+        if not (self.search_max_results <= search_max_results):
+            raise ValueError(
+                f"search_max_results is currently '{self.search_max_results}', must be: search_max_results <= {search_max_results}",  # noqa
+            )
+
+        min_timeout = api_constraints.get("min_request_timeout")
+        if self.request_timeout < min_timeout:
+            raise ValueError(
+                f"request_timeout is currently '{self.request_timeout}', must be: request_timeout >= {min_timeout}",
+            )
+
+        min_recursive_limit = api_constraints.get("min_recursive_limit")
+        max_recursive_limit = api_constraints.get("max_recursive_limit")
+        if not (min_recursive_limit <= self.recursive_limit <= max_recursive_limit):
+            if self.recursive_limit > max_recursive_limit:
                 raise ValueError(
-                    f"current_schema_version '{self.current_schema_version}' does not match required pattern: {schema_version_pattern}",  # noqa
-                )
+                    f"recursive_limit is currently '{self.recursive_limit}' which is greater than max: {max_recursive_limit}. Just use iteration at this point.",  # noqa
+                ) from ValueError
+            raise ValueError(
+                f"Current recursive_limit is currently '{self.recursive_limit}' but must be: {min_recursive_limit} <= recursive_limit <= {max_recursive_limit}",  # noqa
+            ) from ValueError
 
         return self
+
+
+class WikipediaDefaultConfig(BaseModel):
+    collector_name: str
+    current_schema_version: str
+    api: WikipediaDefaultApiConfig
 
 
 class DefaultsConfig(BaseModel):
-    wikipedia: DefaultCollectorConfig
+    wikipedia: WikipediaDefaultConfig
 
 
 class DataSettings(BaseModel):
@@ -174,40 +182,13 @@ class LoggingConfig(BaseModel):
         return self
 
 
-class MetadataSchemaConfig(BaseModel):
-    schema_cache_limit: int
-    schema_check_interval: int
-
-    @model_validator(mode="after")
-    def validate_using_constraints(self):
-        constraints_config = ConfigValidator.get_constraints_config()
-
-        metadata_constraints = constraints_config.get("metadata_schema", {})
-
-        min_cache_limit = metadata_constraints.get("min_cache_limit", 1)
-        max_cache_limit = metadata_constraints.get("max_cache_limit", 100)
-        if not (min_cache_limit <= self.schema_cache_limit <= max_cache_limit):
-            raise ValueError(
-                f"schema_cache_limit currently {self.schema_cache_limit}, must be: {min_cache_limit} <= schema_cache_limit <= {max_cache_limit}",  # noqa
-            )
-
-        min_check_interval = metadata_constraints.get("min_check_interval", 1)
-        max_check_interval = metadata_constraints.get("max_check_interval", 3600)
-        if not (min_check_interval <= self.schema_check_interval <= max_check_interval):
-            raise ValueError(
-                f"schema_check_interval currently {self.schema_check_interval}, must be: {min_check_interval} <= schema_check_interval <= {max_check_interval}",  # noqa
-            )
-
-        return self
-
-
 class WikipediaApiConfig(BaseModel):
     language: List[str]
     rate_limit_delay: float
     max_retries: int
     search_max_results: int
     request_timeout: int
-    recursive_limit: int = None
+    recursive_limit: int
 
     @model_validator(mode="after")
     def validate_using_constraints(self):
@@ -232,7 +213,7 @@ class WikipediaApiConfig(BaseModel):
         search_max_results = api_constraints.get("search_max_results")
         if not (self.search_max_results <= search_max_results):
             raise ValueError(
-                f"search_max_results is currently '{self.search_max_results}', must be: search_max_results <= {search_max_results}"  # noqa
+                f"search_max_results is currently '{self.search_max_results}', must be: search_max_results <= {search_max_results}",  # noqa
             )
 
         min_timeout = api_constraints.get("min_request_timeout")
@@ -246,10 +227,10 @@ class WikipediaApiConfig(BaseModel):
         if not (min_recursive_limit <= self.recursive_limit <= max_recursive_limit):
             if self.recursive_limit > max_recursive_limit:
                 raise ValueError(
-                    f"recursive_limit is currently '{self.recursive_limit}' which is greater than max: {max_recursive_limit}. Just use iteration at this point."  # noqa
+                    f"recursive_limit is currently '{self.recursive_limit}' which is greater than max: {max_recursive_limit}. Just use iteration at this point.",  # noqa
                 ) from ValueError
             raise ValueError(
-                f"Current recursive_limit is currently '{self.recursive_limit}' but must be: {min_recursive_limit} <= recursive_limit <= {max_recursive_limit}"  # noqa
+                f"Current recursive_limit is currently '{self.recursive_limit}' but must be: {min_recursive_limit} <= recursive_limit <= {max_recursive_limit}",  # noqa
             ) from ValueError
 
         return self
@@ -262,9 +243,8 @@ class WikipediaConfig(BaseModel):
 class ValidateWholeConfig(BaseModel):
     data_settings: DataSettings
     logging: LoggingConfig
-    metadata_schema: MetadataSchemaConfig
-    defaults: DefaultsConfig
     wikipedia: WikipediaConfig
+    defaults: DefaultsConfig
 
     @classmethod
     def validate_config(cls, config):

@@ -59,6 +59,10 @@ def sample_config():
                 "request_timeout": 10,
             },
         },
+        "metadata_schema": {
+            "schema_cache_limit": 100,
+            "schema_check_interval": 50,
+        },
     }
 
 
@@ -273,7 +277,7 @@ class TestConfigMerging:
 
 
 class TestConfigLoaderValidation:
-    @patch("epochai.common.config.config_loader.ValidateWholeConfig.validate_config")
+    @patch("epochai.common.config.config_validator.ValidateWholeConfig.validate_config")
     @patch("epochai.common.config.config_loader.ConfigLoader.get_merged_config")
     def test_validate_whole_config(self, mock_merge, mock_validate, sample_config):
         mock_merge.return_value = {"merged": "config"}
@@ -324,6 +328,22 @@ class TestConfigLoaderGetters:
         assert result == {"merged": "wikipedia_config"}
 
     @patch("epochai.common.config.config_loader.ConfigLoader.load_the_config")
+    def test_get_metadata_schema_config(self, mock_load, sample_config):
+        mock_load.return_value = sample_config
+
+        result = ConfigLoader.get_metadata_schema_config()
+
+        assert result == sample_config["metadata_schema"]
+
+    @patch("epochai.common.config.config_loader.ConfigLoader.load_the_config")
+    def test_get_metadata_schema_config_missing_section(self, mock_load):
+        mock_load.return_value = {"other": "config"}
+
+        result = ConfigLoader.get_metadata_schema_config()
+
+        assert result is None
+
+    @patch("epochai.common.config.config_loader.ConfigLoader.load_the_config")
     def test_get_logging_config(self, mock_load, sample_config):
         mock_load.return_value = sample_config
 
@@ -345,47 +365,59 @@ class TestConfigLoaderGetters:
         assert result == expected_defaults
 
 
-class TestConfigLoaderCollectorConfigs:
-    @patch("epochai.common.config.config_loader.ConfigLoader.get_wikipedia_yaml_config")
-    def test_get_all_collector_configs_success(self, mock_get_wiki):
-        mock_wiki_config = {
-            "collector_name": "test_collector",
-            "api": {"collector_name": "test_collector"},
-        }
-        mock_get_wiki.return_value = mock_wiki_config
+class TestConfigLoaderWikipediaTargetsConfig:
+    @patch("epochai.common.services.collection_targets_query_service.CollectionTargetsQueryService")
+    def test_get_wikipedia_targets_config_success(self, mock_service_class):
+        mock_service = Mock()
+        mock_service_class.return_value = mock_service
+        mock_service.get_wikipedia_targets_config.return_value = {"targets": "config"}
 
-        with patch(
-            "epochai.common.database.collection_targets_manager.CollectionTargetManager",
-        ) as mock_manager:
-            mock_manager.get_combined_wikipedia_target_config.return_value = {"combined": "config"}
-
-            result = ConfigLoader.get_all_collector_configs()
-
-        assert result["wikipedia"] == {"combined": "config"}
-
-    @patch("epochai.common.config.config_loader.ConfigLoader.get_wikipedia_yaml_config")
-    def test_get_all_collector_configs_exception(self, mock_get_wiki):
-        mock_get_wiki.side_effect = Exception("Test error")
-
-        result = ConfigLoader.get_all_collector_configs()
-
-        assert result["wikipedia"] is None
-
-    @patch("epochai.common.config.config_loader.ConfigLoader.get_wikipedia_yaml_config")
-    def test_get_wikipedia_config(self, mock_get_wiki):
-        mock_wiki_config = {
-            "api": {"collector_name": "test_collector"},
-        }
-        mock_get_wiki.return_value = mock_wiki_config
-
-        with patch(
-            "epochai.common.database.collection_targets_manager.CollectionTargetManager",
-        ) as mock_manager:
-            mock_manager.get_combined_wikipedia_target_config.return_value = {"combined": "config"}
-
-            result = ConfigLoader.get_wikipedia_config()
-
-        mock_manager.get_combined_wikipedia_target_config.assert_called_once_with(
+        result = ConfigLoader.get_wikipedia_targets_config(
             collector_name="test_collector",
+            collection_status="active",
+            collection_types=["articles"],
+            language_codes=["en"],
+            target_ids=[1, 2, 3],
         )
-        assert result == {"combined": "config"}
+
+        mock_service_class.assert_called_once()
+        mock_service.get_wikipedia_targets_config.assert_called_once_with(
+            collector_name="test_collector",
+            collection_status="active",
+            collection_types=["articles"],
+            language_codes=["en"],
+            target_ids=[1, 2, 3],
+        )
+        assert result == {"targets": "config"}
+
+    @patch("epochai.common.services.collection_targets_query_service.CollectionTargetsQueryService")
+    def test_get_wikipedia_targets_config_minimal_params(self, mock_service_class):
+        mock_service = Mock()
+        mock_service_class.return_value = mock_service
+        mock_service.get_wikipedia_targets_config.return_value = {"targets": "minimal"}
+
+        result = ConfigLoader.get_wikipedia_targets_config(
+            collector_name="minimal_collector",
+            collection_status="pending",
+        )
+
+        mock_service.get_wikipedia_targets_config.assert_called_once_with(
+            collector_name="minimal_collector",
+            collection_status="pending",
+            collection_types=None,
+            language_codes=None,
+            target_ids=None,
+        )
+        assert result == {"targets": "minimal"}
+
+    @patch("epochai.common.services.collection_targets_query_service.CollectionTargetsQueryService")
+    def test_get_wikipedia_targets_config_service_exception(self, mock_service_class):
+        mock_service = Mock()
+        mock_service_class.return_value = mock_service
+        mock_service.get_wikipedia_targets_config.side_effect = Exception("Database error")
+
+        with pytest.raises(Exception, match="Database error"):
+            ConfigLoader.get_wikipedia_targets_config(
+                collector_name="error_collector",
+                collection_status="active",
+            )
