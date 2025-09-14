@@ -4,13 +4,18 @@ import importlib
 import inspect
 from pathlib import Path
 import sys
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from epochai.common.config.config_loader import ConfigLoader
 from epochai.common.enums import CollectionStatusNames
 from epochai.common.logging_config import get_logger, setup_logging
 from epochai.common.services.collection_reports_service import CollectionReportsService
 from epochai.common.services.collection_targets_query_service import CollectionTargetsQueryService
+from epochai.common.utils.decorators import (
+    handle_generic_errors_fail_fast,
+    handle_generic_errors_gracefully,
+    handle_initialization_errors,
+)
 from epochai.data_collection.collectors.base_collector import BaseCollector
 
 
@@ -21,6 +26,7 @@ class CollectorNotFoundError(Exception):
 class CollectorCLI:
     """Collectors orchestrator and CLI"""
 
+    @handle_initialization_errors(f"{__name__} Initialization")
     def __init__(self):
         self.logger = get_logger(__name__)
 
@@ -29,6 +35,13 @@ class CollectorCLI:
 
         self.available_collectors = self._get_available_collectors()
 
+        self.collection_actions_list = {
+            "collect": self.collect,
+            "check": self.check,
+            "retry": self.retry,
+        }
+
+    @handle_generic_errors_gracefully("while getting available collectors", {})
     def _get_available_collectors(self) -> Dict[str, Any]:
         """Gets collector names without suffix mapped to collector class"""
         available_collectors = {}
@@ -64,6 +77,7 @@ class CollectorCLI:
 
         return available_collectors
 
+    @handle_generic_errors_gracefully("while getting available collection types", [])
     def _get_available_collection_types(
         self,
         collector_name: str,
@@ -82,6 +96,7 @@ class CollectorCLI:
             )
             return []
 
+    @handle_generic_errors_gracefully("while getting available language codes", [])
     def _get_available_language_codes(self, collector_name: str) -> List[str]:
         """Gets a list of language codes that have uncollected data in the passed-in collector_name"""
         try:
@@ -97,6 +112,7 @@ class CollectorCLI:
             )
             return []
 
+    @handle_generic_errors_gracefully("while getting ID range", [])
     def _get_id_range(self, collection_targets_id_range: str) -> List[int]:
         """
         Gets inputed id ranges
@@ -144,6 +160,7 @@ class CollectorCLI:
                     raise ValueError(f"Invalid ID: {range_str}") from value_error
         return id_list
 
+    @handle_generic_errors_gracefully("while getting collector instance", None)
     def _get_collector_instance(
         self,
         collector_name: str,
@@ -160,6 +177,7 @@ class CollectorCLI:
             self.logger.error(f"Failed to initalize {collector_name} collector: {general_error}")
             return None
 
+    @handle_generic_errors_gracefully("while getting collection status for collector", None)
     def get_status(
         self,
         collector_name: str,
@@ -179,7 +197,7 @@ class CollectorCLI:
 
             type_details = {}
             for each_type in all_available_types:
-                targets = self.reporter.get_targets_by_type_and_status(each_type, CollectionStatusNames.COLLECTED.value)
+                targets = self.reporter.get_targets_by_type_and_status(each_type, CollectionStatusNames.NOT_COLLECTED.value)
                 total_uncollected = sum(len(lang_targets) for lang_targets in targets.values())
                 type_details[each_type] = {
                     "uncollected_count": total_uncollected,
@@ -199,6 +217,10 @@ class CollectorCLI:
             self.logger.error(f"Error getting status for {collector_name}: {general_error}")
             return {"success": False, "error": str(general_error)}
 
+    @handle_generic_errors_gracefully(
+        "while validating user input",
+        ({"unknown_failure": False}, {"error": "unknown; read error log"}),
+    )
     def _validate_user_input(
         self,
         collector: Any,
@@ -206,6 +228,7 @@ class CollectorCLI:
         collection_type: Optional[List[str]] = None,
         target_ids: Optional[List[int]] = None,
         language_code: Optional[List[str]] = None,
+        collection_status: Optional[str] = None,
     ) -> Dict[str, Any]:
         errors = []
         if not collector:
@@ -226,93 +249,190 @@ class CollectorCLI:
         if target_ids is not None and not target_ids:
             errors.append("Failed to get list of IDs to collect")
 
-        return {"success": False, "error": errors} if errors else {"success": True}
+        all_collection_status_names = [csn.value for csn in CollectionStatusNames]
+        if collection_status and collection_status not in all_collection_status_names:
+            errors.append(f"Invalid collection status was input: {collection_status}")
 
-    def collect(
+        return {"validated": False, "error": errors} if errors else {"validated": True}
+
+    @handle_generic_errors_gracefully("while formatting input", (None, None, None, None, None))
+    def _format_input(
         self,
-        collector_name: Optional[str],
+        collector_name: str,
         collection_type: Optional[List[str]] = None,
         id_list: Optional[str] = None,
         language_code: Optional[List[str]] = None,
+        collection_status: Optional[str] = None,
+    ) -> Tuple[str, Optional[List[str]], Optional[List[int]], Optional[List[str]], Optional[str]]:
+        """Formats user input and validates it"""
+        if id_list:
+            raise NotImplementedError("Getting by IDs not implemented")
+
+        collector_name = collector_name.lower()
+        collection_type = [type.lower() for type in collection_type] if collection_type else None
+        target_ids = self._get_id_range(id_list.lower()) if id_list else None
+        language_code = [code.lower() for code in language_code] if language_code else None
+        collection_status = collection_status.lower() if collection_status else None
+
+        return collector_name, collection_type, target_ids, language_code, collection_status
+
+    @handle_generic_errors_gracefully("while collecting data", [])
+    def collect(
+        self,
+        collector: BaseCollector,
+        collector_name: str,
+        collection_type: Optional[List[str]] = None,
+        target_ids: Optional[List[int]] = None,
+        language_code: Optional[List[str]] = None,
         collection_status: str = CollectionStatusNames.NOT_COLLECTED.value,
+    ) -> List[Dict[str, Any]]:
+        """Collect data using the collector"""
+        self.logger.info(f"Starting data collection with {collector_name} collector")
+        return collector.collect_data(
+            collection_types=collection_type,
+            target_ids=target_ids,
+            language_codes=language_code,
+            collection_status=collection_status,
+        )
+
+    @handle_generic_errors_gracefully("while checking collection targets", [])
+    def check(
+        self,
+        collector: BaseCollector,
+        collector_name: str,
+        collection_type: Optional[List[str]] = None,
+        target_ids: Optional[List[int]] = None,
+        language_code: Optional[List[str]] = None,
+        collection_status: str = CollectionStatusNames.NOT_COLLECTED.value,
+        recheck: bool = False,
+    ) -> List[Dict[str, Any]]:
+        """Check data using the collector"""
+        self.logger.info(f"Starting data check with {collector_name} collector")
+        return collector.check_targets(
+            collection_types=collection_type,
+            target_ids=target_ids,
+            language_codes=language_code,
+            collection_status=collection_status,
+            recheck=recheck,
+        )
+
+    @handle_generic_errors_gracefully("while retrying data", [])
+    def retry(
+        self,
+        collector: BaseCollector,
+        collector_name: str,
+        collection_type: Optional[List[str]] = None,
+        target_ids: Optional[List[int]] = None,
+        language_code: Optional[List[str]] = None,
+        collection_status: str = CollectionStatusNames.FAILED.value.lower(),
+    ) -> List[Dict[str, Any]]:
+        """Retry failed collections using the collector"""
+        self.logger.info(f"Starting retry with {collector_name} collector")
+        return collector.collect_data(
+            collection_status=collection_status,
+            collection_types=collection_type,
+            target_ids=target_ids,
+            language_codes=language_code,
+        )
+
+    @handle_generic_errors_gracefully("while executing user input", [{}, [{}]])
+    def execute_collection(
+        self,
+        action: str,
+        collector_name: str,
+        collection_type: Optional[List[str]] = None,
+        id_list: Optional[str] = None,
+        language_code: Optional[List[str]] = None,
+        collection_status: Optional[str] = None,
+        recheck: Optional[bool] = False,
         dry_run: bool = False,
     ) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
-        """Collects all collection_target_ids that were inputted by the user"""
-        if collection_type and id_list:  # Notifying user about wrong inputs is more important than dry run
+        if action not in self.collection_actions_list:
+            raise ValueError(f"Unknown action: {action} - choose one of {(", ").join(self.collection_actions_list.keys())}")
+
+        if collection_type and id_list:
             raise TypeError(
-                f"Specified collection type and specified IDs are mutually exclusive ({collection_type}, {id_list})",
+                f"Doing {action} by collection type and IDs is not possible, choose either {collection_type} or {id_list}",
             )
 
         if dry_run:
             return self.get_status(collector_name)
 
-        target_ids: Optional[List[int]] = None
-        if id_list:
-            target_ids = self._get_id_range(id_list)
-            return []  # TODO
+        if not collection_status:
+            if action in ["collect", "check"]:
+                collection_status = CollectionStatusNames.NOT_COLLECTED.value
+            elif action == "retry":
+                collection_status = CollectionStatusNames.FAILED.value
+            else:
+                raise ValueError(f"No default collection_status for action '{action}'; please specify a collection_status")
+
+        collector_name, collection_type, target_ids, language_code, collection_status = self._format_input(
+            collector_name=collector_name,
+            collection_type=collection_type,
+            id_list=id_list,
+            language_code=language_code,
+            collection_status=collection_status,
+        )
 
         collector = self._get_collector_instance(collector_name)
-
         check_for_errors = self._validate_user_input(
             collector=collector,
             collector_name=collector_name,
             collection_type=collection_type,
             target_ids=target_ids,
             language_code=language_code,
+            collection_status=collection_status,
         )
-        if not check_for_errors["success"]:
-            self.logger.error(f"Validation failed: {check_for_errors['error']}")
-            return []
+        if not check_for_errors["validated"]:
+            raise ValueError(f"Validation failed: {check_for_errors['error']}")
 
-        self.logger.info(f"Cleaning targets with {collector_name} collector")
-        try:
-            self.logger.info(
-                f"Starting Uncollected Data Collection for {collector_name.capitalize()} Collector",
-            )
-            return collector.collect_data(
-                collection_types=collection_type,
-                target_ids=target_ids,
-                language_codes=language_code,
-                collection_status=collection_status,
-            )
+        action_kwargs = {
+            "collector": collector,
+            "collector_name": collector_name,
+            "collection_type": collection_type,
+            "target_ids": target_ids,
+            "language_code": language_code,
+            "collection_status": collection_status,
+        }
 
-        except Exception as general_error:
-            self.logger.error(f"Error in collection: {general_error}")
-            return []
+        if action == "check":
+            action_kwargs["recheck"] = recheck
 
-    def retry(
-        self,
-    ) -> Dict[str, Any]:
-        """Retries all failed collections"""
-        # TODO
-        return {"success": False, "error": "Retry functionality not yet implemented"}
+        return self.collection_actions_list[action](**action_kwargs)
 
 
-def setup_args(available_collector_keys: List[str]) -> argparse.ArgumentParser:
+@handle_generic_errors_fail_fast("while setting up args")
+def setup_args(
+    available_collector_keys: List[str],
+    collection_actions_list: List[str],
+) -> argparse.ArgumentParser:
     """Sets up CLI args"""
 
     parser = argparse.ArgumentParser(
         description="EpochAI Data Collector CLI",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
+        epilog=f"""
         Examples:
+            collection_actions: {(", ").join(collection_actions_list)}
+            available_collectors: {(", ").join(available_collector_keys)}
+
             # Collect all uncollected data from a collector_name
-                python collector.py collect wikipedia
+                python collector.py collection_action available_collector
 
             # Collect all uncollected data from a collection_type in a collector_name
-                python collector.py collect wikipedia --type political_events
+                python collector.py collection_action available_collector --type political_events
 
             # Collect with language filter
-                python collector.py collect wikipedia --language en
+                python collector.py collection_action available_collector --language en
 
             # Collect specific IDs (NOT YET IMPLEMENTED)
-                python collector.py collect wikipedia --ids "1-4, 5"
+                python collector.py collection_action available_collector --ids "1-4, 5"
 
             # Get status
-                python collector.py status wikipedia
+                python collector.py status available_collector
 
             # Dry run
-                python collector.py collect wikipedia --dry-run
+                python collector.py collection_action available_collector --dry-run
         """,
     )
 
@@ -321,33 +441,35 @@ def setup_args(available_collector_keys: List[str]) -> argparse.ArgumentParser:
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
-    collect_parser = subparsers.add_parser("collect", help="Collects all currently uncollected data")  # fmt: skip
-    collect_parser.add_argument("collector_name", choices=available_collector_keys, help="Type of collector to use")  # fmt: skip
-    collect_parser.add_argument(
-        "--type",
-        dest="collection_type",
-        type=lambda x: [s.strip() for s in x.split(',')],
-        help="Specific collection type to collect",
-    )  # fmt: skip
-    collect_parser.add_argument("--ids", dest="id_list", help="List of IDs or ranges (e.g. '1, 2' or '8-10' or '1, 2, 8-10')")  # fmt: skip
-    collect_parser.add_argument(
-        "--language",
-        dest="language_code",
-        type=lambda x: [s.strip() for s in x.split(',')],
-        help="Language filter (e.g., en, es)",
-    )  # fmt: skip
-    collect_parser.add_argument("--dry-run", dest="dry_run", action="store_true", help="Preview what would be collected without actually collecting")  # fmt: skip
+    # Create check, retry and collect subparsers dynamically
+    for action in collection_actions_list:
+        action_parser = subparsers.add_parser(action, help=f"{action.title()}s data")
+        action_parser.add_argument("collector_name", choices=available_collector_keys, help="Type of collector to use")
+        action_parser.add_argument(
+            "--type",
+            dest="collection_type",
+            type=lambda x: [s.strip() for s in x.split(",")],
+            help=f"Specific collection type to {action}",
+        )
+        action_parser.add_argument("--ids", dest="id_list", help="List of IDs or ranges (e.g. '1, 2' or '8-10' or '1, 2, 8-10')")  # fmt: skip
+        action_parser.add_argument(
+            "--language",
+            dest="language_code",
+            type=lambda x: [s.strip() for s in x.split(",")],
+            help="Language filter (e.g., en, es)",
+        )
+        action_parser.add_argument("--dry-run", dest="dry_run", action="store_true", help=f"Preview what would be {action}ed without actually {action}ing")  # fmt: skip
+
+        if action == "check":
+            action_parser.add_argument(
+                "--recheck",
+                dest="recheck",
+                action="store_true",
+                help="Force recheck of targets that have already been checked",
+            )
 
     status_parser = subparsers.add_parser("status", help="Shows what uncollected data is prensent in a collector")  # fmt: skip
     status_parser.add_argument("collector_name", choices=available_collector_keys)
-
-    retry_parser = subparsers.add_parser("retry", help="Retry failed collections")
-    retry_parser.add_argument(
-        "collector_name",
-        choices=available_collector_keys,
-        help="Collector type to retry",
-    )
-    retry_parser.add_argument("--failed", action="store_true", help="Only retry failed items")
 
     return parser
 
@@ -355,7 +477,8 @@ def setup_args(available_collector_keys: List[str]) -> argparse.ArgumentParser:
 def main():
     cli = CollectorCLI()
     available_collector_keys = list(cli.available_collectors.keys())
-    parser = setup_args(available_collector_keys)
+    collection_actions_list = list(cli.collection_actions_list.keys())
+    parser = setup_args(available_collector_keys, collection_actions_list)
 
     if len(sys.argv) == 1:
         parser.print_help()
@@ -374,45 +497,35 @@ def main():
     success = True
 
     try:
-        if args.command == "collect":
+        command = args.command.lower()
+
+        if command in cli.collection_actions_list:
             options_count = sum([bool(args.collection_type), bool(args.id_list)])
             if options_count > 1:
                 print("Error --type and --ids are mutually exclusive")
                 sys.exit(1)
 
-            if args.id_list:
-                result = cli.collect(
-                    collector_name=args.collector_name,
-                    id_list=args.id_list,
-                    language_code=args.language_code,
-                    dry_run=args.dry_run,
-                )
-            elif args.collection_type:
-                result = cli.collect(
-                    collector_name=args.collector_name,
-                    collection_type=args.collection_type,
-                    language_code=args.language_code,
-                    dry_run=args.dry_run,
-                )
-            else:
-                result = cli.collect(
-                    collector_name=args.collector_name,
-                    language_code=args.language_code,
-                    dry_run=args.dry_run,
-                )
+            recheck = getattr(args, "recheck", False)
 
-        elif args.command == "status":
+            result = cli.execute_collection(
+                action=command,
+                collector_name=args.collector_name,
+                collection_type=args.collection_type,
+                language_code=args.language_code,
+                id_list=args.id_list,
+                dry_run=args.dry_run,
+                recheck=recheck,
+            )
+
+        elif command == "status":
             result = cli.get_status(args.collector_name)
-
-        elif args.command == "retry":
-            result = cli.retry()  # TODO
 
         else:
             parser.print_help()
             return
 
         if result:
-            if args.command == "status":
+            if command == "status":
                 if isinstance(result, dict) and result.get("success"):
                     collector_name = result["collector_name"].title()
                     print(f"\n{collector_name} Collector Status:")
@@ -439,10 +552,8 @@ def main():
                     status_display_names = {
                         "not_collected": "Uncollected targets",
                         "failed": "Failed collection",
-                        "failed_check": "Failed check",
-                        "in_progress": "In progress",
+                        "check_failed": "Failed check",
                         "collected": "Successfully collected",
-                        "needs_retry": "Needs retry",
                         "skipped": "Skipped",
                     }
 
@@ -489,45 +600,50 @@ def main():
                     print("Error: Unexpected result type for status command")
                     success = False
 
-            elif args.command == "collect":
+            elif command in cli.collection_actions_list:
+                action_name = command.title()
+                if command == "collect":
+                    action_verb = "collected"
+
+                elif command == "check":
+                    action_verb = "checked"
+
+                elif command == "retry":
+                    action_verb = "retried"
+
                 if isinstance(result, list):
                     if result:
-                        print("\nCollection completed successfully!")
+                        print(f"\n{action_name} completed successfully!")
                         print(f"Processed {len(result)} items")
 
                         successful = sum(1 for item in result if item.get("success", True))
                         failed = len(result) - successful
 
+                        if command == "check":
+                            successful = sum(1 for item in result if item.get("test_status") == "success")
+                            failed = len(result) - successful
+                        else:
+                            successful = sum(1 for item in result if item.get("success", True))
+                            failed = len(result) - successful
+
                         if successful > 0:
-                            print(f"\tSuccessfully collected: {successful}")
+                            print(f"\tSuccessfully {action_verb}: {successful}")
                         if failed > 0:
-                            print(f"\t Failed to collect: {failed}")
+                            print(f"\t Failed to {command}: {failed}")
                             success = False
                     else:
-                        print("Collection completed - no items to process or validation failed")
+                        print(f"{action_name} completed - no items to process or validation failed")
                         success = False
 
                 elif isinstance(result, dict):
                     if result.get("success"):
-                        print("Dry run completed successfully - showing what would be collected:")
+                        print(f"Dry run completed successfully - showing what would be {action_verb}:")
                         if result.get("type_details"):
                             for type_name, details in result["type_details"].items():
                                 print(f"  {type_name}: {details['uncollected_count']} items")
                     else:
-                        print(f"Collection failed: {result.get('error', 'Unknown error')}")
+                        print(f"{action_name} failed: {result.get('error', 'Unknown error')}")
                         success = False
-
-            elif args.command == "retry":
-                # For retry command, result should be a dict
-                if isinstance(result, dict):
-                    if result.get("success"):
-                        print("Retry completed successfully")
-                    else:
-                        print(f"Retry failed: {result.get('error', 'Unknown error')}")
-                        success = False
-                else:
-                    print("Error: Unexpected result type for retry command")
-                    success = False
         else:
             print("Operation completed with no results")
             success = False
