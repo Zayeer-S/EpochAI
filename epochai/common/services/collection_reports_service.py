@@ -167,25 +167,13 @@ class CollectionReportsService:
         not_collected_count = sum(
             1 for t in all_targets if status_map.get(t.collection_status_id) == CollectionStatusNames.NOT_COLLECTED.value
         )
-        in_progress_count = sum(
-            1 for t in all_targets if status_map.get(t.collection_status_id) == CollectionStatusNames.IN_PROGRESS.value
-        )
         failed_count = sum(1 for t in all_targets if status_map.get(t.collection_status_id) == CollectionStatusNames.FAILED.value)
-        needs_retry_count = sum(
-            1 for t in all_targets if status_map.get(t.collection_status_id) == CollectionStatusNames.NEEDS_RETRY.value
-        )
-        skipped_count = sum(
-            1 for t in all_targets if status_map.get(t.collection_status_id) == CollectionStatusNames.SKIPPED.value
-        )
 
         summary = {
             "total_targets": total_targets,
             "collected": collected_count,
             "not_collected": not_collected_count,
-            "in_progress": in_progress_count,
             "failed": failed_count,
-            "needs_retry": needs_retry_count,
-            "skipped": skipped_count,
             "collection_percentage": round((collected_count / total_targets * 100), 2) if total_targets > 0 else 0,
         }
 

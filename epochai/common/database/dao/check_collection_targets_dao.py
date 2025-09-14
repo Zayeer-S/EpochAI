@@ -7,7 +7,7 @@ from epochai.common.database.models import CheckCollectionTargets
 from epochai.common.logging_config import get_logger
 
 
-class DebugWikipediaResultsDAO:
+class CheckCollectionTargetsDAO:
     def __init__(self):
         self.db = get_database()
         self.logger = get_logger(__name__)
