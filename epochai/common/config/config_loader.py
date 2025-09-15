@@ -1,7 +1,7 @@
 import contextlib
 import locale
 import os
-from typing import Any, Dict
+from typing import Any, Dict, List, Optional
 
 import yaml
 
@@ -164,6 +164,13 @@ class ConfigLoader:
         return merged_config
 
     @staticmethod
+    def get_metadata_schema_config() -> Dict[str, Any]:
+        """Gets the YAML metadata_schema portion of the config"""
+        whole_config = ConfigLoader.load_the_config()
+
+        return whole_config.get("metadata_schema")
+
+    @staticmethod
     def get_logging_config() -> Dict[str, Any]:
         """Get logging configuration and validate it"""
         config = ConfigLoader.load_the_config()
@@ -179,45 +186,25 @@ class ConfigLoader:
         return logging_config
 
     @staticmethod
-    def get_all_collector_configs() -> Dict[str, Any]:
-        """Gets all collector configs"""
+    def get_wikipedia_targets_config(
+        collector_name: str,
+        collection_status: str,
+        collection_types: Optional[List[str]] = None,
+        language_codes: Optional[List[str]] = None,
+        target_ids: Optional[List[int]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Gets Wikipedia collection targets configuration from database
 
-        all_configs = {}
+        Note: This is just a convenience method for config access consistency
+        """
+        from epochai.common.services.collection_targets_query_service import CollectionTargetsQueryService
 
-        try:
-            wikipedia_yaml_config = ConfigLoader.get_wikipedia_yaml_config()
-            collector_name = wikipedia_yaml_config["collector_name"]
-
-            from epochai.common.database.collection_targets_manager import CollectionTargetManager
-
-            all_configs["wikipedia"] = CollectionTargetManager.get_combined_wikipedia_target_config(
-                collector_name=collector_name,
-            )
-        except Exception as e:
-            print(f"Could not load wikipedia collector: '{e}'")
-            all_configs["wikipedia"] = None
-
-        return all_configs
-
-    @staticmethod
-    def get_wikipedia_config() -> Dict[str, Any]:
-        """Gets whole Wikipedia Config (combination of YAML + DB) and returns it"""
-        wikipedia_yaml_config = ConfigLoader.get_wikipedia_yaml_config()
-        collector_name = wikipedia_yaml_config["api"]["collector_name"]
-
-        from epochai.common.database.collection_targets_manager import CollectionTargetManager
-
-        result: Dict[str, Any] = CollectionTargetManager.get_combined_wikipedia_target_config(
+        service = CollectionTargetsQueryService()
+        return service.get_wikipedia_targets_config(
             collector_name=collector_name,
+            collection_status=collection_status,
+            collection_types=collection_types,
+            language_codes=language_codes,
+            target_ids=target_ids,
         )
-
-        return result
-
-    @staticmethod
-    def get_collection_status_summary() -> Dict[str, Any]:
-        """Gets collection status summary"""
-        from epochai.common.database.collection_targets_manager import CollectionTargetManager
-
-        result: Dict[str, Any] = CollectionTargetManager.get_collection_status_summary()
-
-        return result

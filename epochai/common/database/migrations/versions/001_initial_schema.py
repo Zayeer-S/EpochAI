@@ -27,6 +27,15 @@ def upgrade():
     """)
 
     op.execute("""
+        CREATE TABLE IF NOT EXISTS collection_statuses (
+            id SERIAL PRIMARY KEY,
+            collection_status_name TEXT NOT NULL UNIQUE,
+            updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+            created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+        );
+    """)
+
+    op.execute("""
         CREATE TABLE IF NOT EXISTS attempt_statuses (
             id SERIAL PRIMARY KEY,
             attempt_status_name TEXT NOT NULL UNIQUE,
@@ -97,7 +106,7 @@ def upgrade():
             collection_type_id INTEGER NOT NULL REFERENCES collection_types(id) ON DELETE RESTRICT,
             language_code TEXT NOT NULL,
             collection_name TEXT NOT NULL,
-            is_collected BOOLEAN NOT NULL DEFAULT FALSE,
+            collection_status_id INTEGER NOT NULL REFERENCES collection_statuses(id) ON DELETE RESTRICT,
             updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
             created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
 
@@ -135,7 +144,7 @@ def upgrade():
     """)
 
     op.execute("""
-        CREATE TABLE IF NOT EXISTS debug_wikipedia_results (
+        CREATE TABLE IF NOT EXISTS check_collection_targets (
             id SERIAL PRIMARY KEY,
             collection_target_id INTEGER NOT NULL REFERENCES collection_targets(id) ON DELETE CASCADE,
             search_term_used TEXT NOT NULL,
@@ -187,7 +196,7 @@ def upgrade():
         cleaner_version TEXT NOT NULL,
         cleaning_time_ms INTEGER NOT NULL,
         cleaned_at TIMESTAMP WITH TIME ZONE NOT NULL,
-        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+        created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
 
         CONSTRAINT uk_cleaned_data_raw_cleaner_version UNIQUE (cleaner_used, cleaner_version, raw_data_id)
     );
@@ -198,7 +207,7 @@ def upgrade():
         CREATE INDEX IF NOT EXISTS idx_collection_targets_collector_types ON collection_targets(collector_name_id, collection_type_id);
     """)
     op.execute("""
-        CREATE INDEX IF NOT EXISTS idx_collection_targets_is_collected ON collection_targets(is_collected);
+        CREATE INDEX IF NOT EXISTS idx_collection_targets_collection_statuses ON collection_targets(collection_status_id);
     """)
     op.execute("""
         CREATE INDEX IF NOT EXISTS idx_collection_targets_language_code ON collection_targets(language_code);
@@ -228,13 +237,13 @@ def upgrade():
         CREATE INDEX IF NOT EXISTS idx_raw_data_created_at ON raw_data(created_at);
     """)
     op.execute("""
-        CREATE INDEX IF NOT EXISTS idx_debug_wikipedia_results_collection_target_id ON debug_wikipedia_results(collection_target_id);
+        CREATE INDEX IF NOT EXISTS idx_check_collection_targets_collection_target_id ON check_collection_targets(collection_target_id);
     """)
     op.execute("""
-        CREATE INDEX IF NOT EXISTS idx_debug_wikipedia_results_test_status ON debug_wikipedia_results(test_status);
+        CREATE INDEX IF NOT EXISTS idx_check_collection_targets_test_status ON check_collection_targets(test_status);
     """)
     op.execute("""
-        CREATE INDEX IF NOT EXISTS idx_debug_wikipedia_results_created_at ON debug_wikipedia_results(created_at);
+        CREATE INDEX IF NOT EXISTS idx_check_collection_targets_created_at ON check_collection_targets(created_at);
     """)
     op.execute("""
         CREATE INDEX IF NOT EXISTS idx_run_collection_metadata_run_type_id ON run_collection_metadata(run_type_id);
@@ -272,13 +281,16 @@ def upgrade():
         COMMENT ON TABLE collection_targets IS 'Configuration of what needs to be collected';
     """)
     op.execute("""
+        COMMENT ON TABLE collection_statuses IS 'Lookup table for collection target statuses';
+    """)
+    op.execute("""
         COMMENT ON TABLE collection_attempts IS 'Log of each collection attempt';
     """)
     op.execute("""
         COMMENT ON TABLE raw_data IS 'Table storing collected content from collectors';
     """)
     op.execute("""
-        COMMENT ON TABLE debug_wikipedia_results IS 'Results from debug testing of wikipedia collector';
+        COMMENT ON TABLE check_collection_targets IS 'Results from debug testing of collection targets';
     """)
     op.execute("""
         COMMENT ON TABLE run_collection_metadata IS 'Metadata about collection runs and their performance';
@@ -295,9 +307,6 @@ def upgrade():
 
     # COLUMN COMMENTS
     op.execute("""
-        COMMENT ON COLUMN collection_targets.is_collected IS 'Whether or not this configuration has beeen successfully collected (True = Collected)';
-    """)
-    op.execute("""
         COMMENT ON COLUMN collection_attempts.language_code IS 'Actual language code used during the collection attempt';
     """)
     op.execute("""
@@ -307,7 +316,7 @@ def upgrade():
         COMMENT ON COLUMN raw_data.validation_error IS 'JSON object containing the validation error details if the validation has failed';
     """)
     op.execute("""
-        COMMENT ON COLUMN debug_wikipedia_results.test_duration IS 'Test duration in miliseconds';
+        COMMENT ON COLUMN check_collection_targets.test_duration IS 'Test duration in miliseconds';
     """)
     op.execute("""
         COMMENT ON COLUMN run_collection_metadata.config_used IS 'JSON of configuration used during the run';
@@ -316,7 +325,7 @@ def upgrade():
 def downgrade():
     op.execute("DROP TABLE IF EXISTS link_attempts_to_runs CASCADE;")
     op.execute("DROP TABLE IF EXISTS run_collection_metadata CASCADE;")
-    op.execute("DROP TABLE IF EXISTS debug_wikipedia_results CASCADE;")
+    op.execute("DROP TABLE IF EXISTS check_collection_targets CASCADE;")
     op.execute("DROP TABLE IF EXISTS raw_data CASCADE;")
     op.execute("DROP TABLE IF EXISTS collection_attempts CASCADE;")
     op.execute("DROP TABLE IF EXISTS collection_targets CASCADE;")
@@ -329,5 +338,6 @@ def downgrade():
     op.execute("DROP TABLE IF EXISTS validation_statuses CASCADE;")
     op.execute("DROP TABLE IF EXISTS error_types CASCADE;")
     op.execute("DROP TABLE IF EXISTS attempt_statuses CASCADE;")
+    op.execute("DROP TABLE IF EXISTS collection_statuses CASCADE;")
     op.execute("DROP TABLE IF EXISTS collection_types CASCADE;")
     op.execute("DROP TABLE IF EXISTS collector_names CASCADE;")

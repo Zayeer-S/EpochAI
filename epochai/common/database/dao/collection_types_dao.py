@@ -57,7 +57,7 @@ class CollectionTypesDAO:
             self.logger.error(f"Error getting collection type by ID {type_id}: {general_error}")
             return None
 
-    def get_by_type(
+    def get_by_name(
         self,
         collection_type: str,
     ) -> Optional[CollectionTypes]:
@@ -97,7 +97,7 @@ class CollectionTypesDAO:
         collection_type: str,
     ) -> Optional[CollectionTypes]:
         """Gets existing type or create new one if doesn't exist"""
-        existing = self.get_by_type(collection_type)
+        existing = self.get_by_name(collection_type)
         if existing:
             return existing
 

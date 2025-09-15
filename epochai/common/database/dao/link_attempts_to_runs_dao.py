@@ -39,7 +39,7 @@ class LinkAttemptsToRunsDAO:
 
         except Exception as general_error:
             self.logger.error(
-                f"Error linking attempt {collection_attempt_id} to run {run_collection_metadata_id}: {general_error}",  # noqa
+                f"Error linking attempt {collection_attempt_id} to run {run_collection_metadata_id}: {general_error}",
             )
             return None
 
@@ -103,9 +103,7 @@ class LinkAttemptsToRunsDAO:
         collection_attempt_id: int,
     ) -> List[int]:
         """Gets all run IDs that include a specific attempt"""
-        query = (
-            "SELECT run_collection_metadata_id FROM link_attempts_to_runs WHERE collection_attempt_id = %s"
-        )
+        query = "SELECT run_collection_metadata_id FROM link_attempts_to_runs WHERE collection_attempt_id = %s"
 
         try:
             results = self.db.execute_select_query(query, (collection_attempt_id,))

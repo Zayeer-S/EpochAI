@@ -8,6 +8,43 @@ from epochai.common.database.models import RawData
 from epochai.data_processing.cleaners.wikipedia_cleaner import WikipediaCleaner
 
 
+# Create a shared patch decorator that we can apply to all test methods
+def mock_all_dependencies(func):
+    """Decorator to mock all dependencies for WikipediaCleaner initialization"""
+    decorators = [
+        patch("epochai.data_processing.cleaners.wikipedia_cleaner.ConfigLoader.get_data_config"),
+        patch("epochai.data_processing.cleaners.base_cleaner.CleaningService"),
+        patch("epochai.common.utils.schema_utils.SchemaUtils"),
+        patch("epochai.common.config.config_loader.ConfigLoader.get_metadata_schema_config"),
+    ]
+
+    for decorator in reversed(decorators):
+        func = decorator(func)
+
+    return func
+
+
+def setup_mocks(mock_schema_config, mock_schema_utils_class, mock_service_class, mock_config_loader, mock_config):
+    """Helper function to setup all mocks consistently"""
+    # Mock the schema config
+    mock_schema_config.return_value = {"schema_cache_limit": 3, "schema_check_interval": 5}
+
+    # Mock the config loader
+    mock_config_loader.return_value = mock_config
+
+    # Mock the schema utils instance
+    mock_schema_utils = Mock()
+    mock_schema_utils.get_metadata_schema_id.return_value = 123
+    mock_schema_utils_class.return_value = mock_schema_utils
+
+    # Mock the service
+    mock_service = Mock()
+    mock_service.raw_data_dao.get_by_validation_status.return_value = []
+    mock_service_class.return_value = mock_service
+
+    return mock_service
+
+
 @pytest.fixture
 def mock_config():
     """Mock configuration based on config.yml"""
@@ -15,10 +52,12 @@ def mock_config():
         "cleaners": {
             "wikipedia": {
                 "cleaner_name": "wikipedia_cleaner",
-                "current_version": "1.0.0",
-                "schema_cache_limit": 3,
-                "schema_check_interval": 5,
+                "current_schema_version": "1.0.0",  # Changed from current_version
             },
+        },
+        "metadata_schema": {
+            "schema_cache_limit": 3,
+            "schema_check_interval": 5,
         },
     }
 
@@ -114,12 +153,16 @@ def raw_data_no_metadata():
 
 
 class TestWikipediaCleanerInitialization:
-    @patch("epochai.data_processing.cleaners.wikipedia_cleaner.ConfigLoader.get_data_config")
-    @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_initialization_success(self, mock_service_class, mock_config_loader, mock_config):
-        mock_config_loader.return_value = mock_config
-        mock_service = Mock()
-        mock_service_class.return_value = mock_service
+    @mock_all_dependencies
+    def test_initialization_success(
+        self,
+        mock_schema_config,
+        mock_schema_utils_class,
+        mock_service_class,
+        mock_config_loader,
+        mock_config,
+    ):
+        setup_mocks(mock_schema_config, mock_schema_utils_class, mock_service_class, mock_config_loader, mock_config)
 
         cleaner = WikipediaCleaner()
 
@@ -128,12 +171,570 @@ class TestWikipediaCleanerInitialization:
         assert cleaner.config == mock_config
         mock_service_class.assert_called_once_with("wikipedia_cleaner", "1.0.0")
 
-    @patch("epochai.data_processing.cleaners.wikipedia_cleaner.ConfigLoader.get_data_config")
-    @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_regex_patterns_compiled(self, mock_service_class, mock_config_loader, mock_config):
-        mock_config_loader.return_value = mock_config
-        mock_service = Mock()
-        mock_service_class.return_value = mock_service
+    @mock_all_dependencies
+    def test_clean_wikipedia_batch_no_records(
+        self,
+        mock_schema_config,
+        mock_schema_utils_class,
+        mock_service_class,
+        mock_config_loader,
+        mock_config,
+    ):
+        mock_service = setup_mocks(
+            mock_schema_config,
+            mock_schema_utils_class,
+            mock_service_class,
+            mock_config_loader,
+            mock_config,
+        )
+
+        mock_service.raw_data_dao.get_by_validation_status.return_value = []
+
+        cleaner = WikipediaCleaner()
+        result = cleaner.clean_wikipedia_batch()
+
+        expected_result = {
+            "success_count": 0,
+            "error_count": 0,
+            "cleaned_ids": [],
+            "error_ids": [],
+        }
+        assert result == expected_result
+
+
+class TestIntegrationScenarios:
+    @mock_all_dependencies
+    def test_full_cleaning_process_complex_content(
+        self,
+        mock_schema_config,
+        mock_schema_utils_class,
+        mock_service_class,
+        mock_config_loader,
+        mock_config,
+    ):
+        setup_mocks(mock_schema_config, mock_schema_utils_class, mock_service_class, mock_config_loader, mock_config)
+
+        # Complex raw data with many edge cases
+        complex_metadata = {
+            "title": "Test Article[1]   ",
+            "summary": "This is a summary[citation needed] with \u201csmart quotes\u201d and em\u2014dashes.",
+            "content": "This is content[1][2][clarification needed] with\n\n\n\nmultiple newlines and   extra   spaces. It has \u2018single quotes\u2019 and en\u2013dashes too.",
+            "categories": [
+                "Category 1",
+                "Category 1",  # Duplicate
+                123,  # Non-string
+                "   Category 2   ",  # Whitespace
+                "",  # Empty string
+                "Category 2",  # Duplicate after cleaning
+            ],
+            "links": [
+                "Link 1",
+                "Link 1",  # Duplicate
+                None,  # Non-string
+                "   Link 2   ",  # Whitespace
+                "Link 2",  # Duplicate after cleaning
+            ],
+            "page_id": "12345",
+            "language": "en",
+        }
+
+        raw_data = RawData(
+            id=999,
+            title="Test Article",
+            language_code="en",
+            metadata=complex_metadata,
+            validation_status_id=1,
+        )
+
+        cleaner = WikipediaCleaner()
+
+        with patch("epochai.data_processing.cleaners.wikipedia_cleaner.datetime") as mock_datetime:
+            mock_datetime.now.return_value.isoformat.return_value = "2023-01-15T12:00:00Z"
+            result = cleaner.transform_content(raw_data)
+
+        # Verify comprehensive cleaning
+        assert result["cleaned_title"] == "Test Article"
+        assert "[citation needed]" not in result["cleaned_summary"]
+        assert "\u201c" not in result["cleaned_summary"]  # Smart quotes normalized
+        assert "\u2014" not in result["cleaned_summary"]  # Em dash normalized
+
+        assert "[1]" not in result["cleaned_content"]
+        assert "[clarification needed]" not in result["cleaned_content"]
+        assert "\n\n\n\n" not in result["cleaned_content"]  # Multiple newlines normalized
+        assert "   extra   " not in result["cleaned_content"]  # Multiple spaces normalized
+
+        # Verify deduplication and filtering
+        assert len(result["cleaned_categories"]) == 2  # Only "Category 1" and "Category 2"
+        assert len(result["cleaned_links"]) == 2  # Only "Link 1" and "Link 2"
+
+        # Verify counts
+        assert result["category_count"] == 2
+        assert result["internal_link_count"] == 2
+        assert result["content_word_count"] > 0
+        assert result["summary_word_count"] > 0
+
+    @mock_all_dependencies
+    def test_missing_optional_fields(
+        self,
+        mock_schema_config,
+        mock_schema_utils_class,
+        mock_service_class,
+        mock_config_loader,
+        mock_config,
+    ):
+        setup_mocks(mock_schema_config, mock_schema_utils_class, mock_service_class, mock_config_loader, mock_config)
+
+        # Metadata with only required fields
+        minimal_metadata = {
+            "title": "Minimal Article",
+            "content": "This is minimal content.",
+            "page_id": "67890",
+            "language": "en",
+            # Missing: summary, categories, links
+        }
+
+        raw_data = RawData(
+            id=888,
+            title="Minimal Article",
+            language_code="en",
+            metadata=minimal_metadata,
+            validation_status_id=1,
+        )
+
+        cleaner = WikipediaCleaner()
+
+        with patch("epochai.data_processing.cleaners.wikipedia_cleaner.datetime") as mock_datetime:
+            mock_datetime.now.return_value.isoformat.return_value = "2023-01-15T12:00:00Z"
+            result = cleaner.transform_content(raw_data)
+
+        # Should handle missing optional fields gracefully
+        assert result["cleaned_title"] == "Minimal Article"
+        assert result["cleaned_content"] == "This is minimal content."
+        assert "cleaned_summary" not in result
+        assert "cleaned_categories" not in result
+        assert "cleaned_links" not in result
+
+        # Counts should still be calculated
+        assert result["content_word_count"] == 4
+        assert result["content_char_count"] == len("This is minimal content.")
+        assert result["original_content_length"] == len("This is minimal content.")
+
+
+class TestErrorHandling:
+    @mock_all_dependencies
+    def test_malformed_metadata_structure(
+        self,
+        mock_schema_config,
+        mock_schema_utils_class,
+        mock_service_class,
+        mock_config_loader,
+        mock_config,
+    ):
+        setup_mocks(mock_schema_config, mock_schema_utils_class, mock_service_class, mock_config_loader, mock_config)
+
+        # Metadata with unexpected structure
+        malformed_metadata = {
+            "title": {"nested": "title"},  # Should be string
+            "content": ["list", "instead", "of", "string"],  # Should be string
+            "categories": "string instead of list",  # Should be list
+            "links": {"dict": "instead of list"},  # Should be list
+            "page_id": "12345",
+            "language": "en",
+        }
+
+        raw_data = RawData(
+            id=777,
+            title="Malformed Article",
+            language_code="en",
+            metadata=malformed_metadata,
+            validation_status_id=1,
+        )
+
+        cleaner = WikipediaCleaner()
+
+        # Should handle malformed data without crashing
+        with patch("epochai.data_processing.cleaners.wikipedia_cleaner.datetime") as mock_datetime:
+            mock_datetime.now.return_value.isoformat.return_value = "2023-01-15T12:00:00Z"
+            result = cleaner.transform_content(raw_data)
+
+        # Should still return a valid result structure
+        assert "cleaning_operations_applied" in result
+        assert "cleaned_at" in result
+        assert "original_content_length" in result
+
+    @mock_all_dependencies
+    def test_extremely_long_content(
+        self,
+        mock_schema_config,
+        mock_schema_utils_class,
+        mock_service_class,
+        mock_config_loader,
+        mock_config,
+    ):
+        setup_mocks(mock_schema_config, mock_schema_utils_class, mock_service_class, mock_config_loader, mock_config)
+
+        # Very long content to test performance
+        long_content = "This is a very long article. " * 1000  # 30,000 characters
+        long_metadata = {
+            "title": "Long Article",
+            "content": long_content,
+            "summary": "This is a long summary. " * 50,  # 1,200 characters
+            "categories": [f"Category {i}" for i in range(100)],  # 100 categories
+            "links": [f"Link {i}" for i in range(200)],  # 200 links
+            "page_id": "99999",
+            "language": "en",
+        }
+
+        raw_data = RawData(
+            id=666,
+            title="Long Article",
+            language_code="en",
+            metadata=long_metadata,
+            validation_status_id=1,
+        )
+
+        cleaner = WikipediaCleaner()
+
+        with patch("epochai.data_processing.cleaners.wikipedia_cleaner.datetime") as mock_datetime:
+            mock_datetime.now.return_value.isoformat.return_value = "2023-01-15T12:00:00Z"
+            result = cleaner.transform_content(raw_data)
+
+        # Should handle large content without issues
+        assert len(result["cleaned_content"]) > 0
+        assert result["content_word_count"] > 0
+        assert result["category_count"] == 100
+        assert result["internal_link_count"] == 200
+        assert result["original_content_length"] == len(long_content)
+
+
+class TestRegexPatternMatching:
+    @mock_all_dependencies
+    def test_citation_pattern_comprehensive(
+        self,
+        mock_schema_config,
+        mock_schema_utils_class,
+        mock_service_class,
+        mock_config_loader,
+        mock_config,
+    ):
+        setup_mocks(mock_schema_config, mock_schema_utils_class, mock_service_class, mock_config_loader, mock_config)
+
+        cleaner = WikipediaCleaner()
+
+        # Test various citation formats
+        test_cases = [
+            ("Text[1]", "Text"),
+            ("Text[123]", "Text"),
+            ("Text[citation needed]", "Text"),
+            ("Text[clarification needed]", "Text"),
+            ("Text[1][2][3]", "Text"),
+            ("Text[citation needed][clarification needed]", "Text"),
+            ("Text [1] more text [2]", "Text  more text "),
+        ]
+
+        for input_text, expected in test_cases:
+            result = cleaner._clean_text_content(input_text)
+            # Remove extra spaces that might be left after citation removal
+            result = " ".join(result.split())
+            expected = " ".join(expected.split())
+            assert result == expected, f"Failed for input: {input_text}"
+
+    @mock_all_dependencies
+    def test_unicode_normalization_comprehensive(
+        self,
+        mock_schema_config,
+        mock_schema_utils_class,
+        mock_service_class,
+        mock_config_loader,
+        mock_config,
+    ):
+        setup_mocks(mock_schema_config, mock_schema_utils_class, mock_service_class, mock_config_loader, mock_config)
+
+        cleaner = WikipediaCleaner()
+
+        # Test various unicode characters
+        test_cases = [
+            # Smart quotes
+            ("\u201cquoted text\u201d", '"quoted text"'),
+            ("\u2018single quoted\u2019", "'single quoted'"),
+            # Dashes
+            ("en\u2013dash", "en-dash"),
+            ("em\u2014dash", "em-dash"),
+            # Mixed
+            ("\u201cHe said\u2014\u2018hello\u2019\u201d", "\"He said-'hello'\""),
+        ]
+
+        for input_text, expected in test_cases:
+            result = cleaner._clean_text_content(input_text)
+            assert result == expected, f"Failed for input: {input_text}"
+
+    @mock_all_dependencies
+    def test_whitespace_normalization_edge_cases(
+        self,
+        mock_schema_config,
+        mock_schema_utils_class,
+        mock_service_class,
+        mock_config_loader,
+        mock_config,
+    ):
+        setup_mocks(mock_schema_config, mock_schema_utils_class, mock_service_class, mock_config_loader, mock_config)
+
+        cleaner = WikipediaCleaner()
+
+        # Test various whitespace scenarios
+        test_cases = [
+            ("word1   word2", "word1 word2"),
+            ("word1\t\tword2", "word1 word2"),
+            ("word1\n word2", "word1\n word2"),
+            ("word1 \t\n  word2", "word1 \n word2"),
+            ("   leading and trailing   ", "leading and trailing"),
+        ]
+
+        for input_text, expected in test_cases:
+            result = cleaner._clean_text_content(input_text)
+            assert result == expected, f"Failed for input: {input_text!r}"
+
+
+class TestConfigurationIntegration:
+    @mock_all_dependencies
+    def test_config_values_used_correctly(
+        self,
+        mock_schema_config,
+        mock_schema_utils_class,
+        mock_service_class,
+        mock_config_loader,
+        mock_config,
+    ):
+        modified_config = {
+            "cleaners": {
+                "wikipedia": {
+                    "cleaner_name": "custom_wikipedia_cleaner",
+                    "current_schema_version": "2.5.0",  # Changed from current_version
+                },
+            },
+            "metadata_schema": {
+                "schema_cache_limit": 10,
+                "schema_check_interval": 15,
+            },
+        }
+
+        setup_mocks(mock_schema_config, mock_schema_utils_class, mock_service_class, mock_config_loader, modified_config)
+
+        cleaner = WikipediaCleaner()
+
+        # Verify the custom config values are used
+        assert cleaner.cleaner_name == "custom_wikipedia_cleaner"
+        assert cleaner.cleaner_version == "2.5.0"
+        assert cleaner.config == modified_config
+
+        # Verify CleaningService was initialized with correct values
+        mock_service_class.assert_called_once_with("custom_wikipedia_cleaner", "2.5.0")
+
+    @mock_all_dependencies
+    def test_missing_config_section_raises_error(
+        self,
+        mock_schema_config,
+        mock_schema_utils_class,
+        mock_service_class,
+        mock_config_loader,
+    ):
+        # Config missing wikipedia section
+        incomplete_config = {
+            "cleaners": {
+                "other_cleaner": {
+                    "cleaner_name": "other",
+                    "current_schema_version": "1.0.0",  # Changed from current_version
+                },
+            },
+        }
+
+        setup_mocks(mock_schema_config, mock_schema_utils_class, mock_service_class, mock_config_loader, incomplete_config)
+
+        # Should raise error when trying to access missing config
+        with pytest.raises((KeyError, AttributeError)):
+            WikipediaCleaner()
+
+
+class TestBatchOperationsIntegration:
+    @mock_all_dependencies
+    def test_batch_cleaning_with_mixed_record_types(
+        self,
+        mock_schema_config,
+        mock_schema_utils_class,
+        mock_service_class,
+        mock_config_loader,
+        mock_config,
+    ):
+        mock_service = setup_mocks(
+            mock_schema_config,
+            mock_schema_utils_class,
+            mock_service_class,
+            mock_config_loader,
+            mock_config,
+        )
+
+        # Mock records with different characteristics
+        mock_records = [
+            Mock(id=1),  # Normal record
+            Mock(id=2),  # Record that might fail
+            Mock(id=3),  # Another normal record
+            Mock(id=None),  # Record with no ID (should be filtered)
+        ]
+        mock_service.raw_data_dao.get_by_validation_status.return_value = mock_records
+
+        cleaner = WikipediaCleaner()
+
+        expected_batch_result = {
+            "success_count": 2,
+            "error_count": 1,
+            "cleaned_ids": [101, 103],
+            "error_ids": [2],
+        }
+
+        with patch.object(
+            cleaner,
+            "clean_multiple_records",
+            return_value=expected_batch_result,
+        ) as mock_clean_multiple:
+            result = cleaner.clean_wikipedia_batch()
+
+        # Should filter out None IDs
+        mock_clean_multiple.assert_called_once_with([1, 2, 3])
+        assert result == expected_batch_result
+
+    @mock_all_dependencies
+    def test_batch_cleaning_zero_limit(
+        self,
+        mock_schema_config,
+        mock_schema_utils_class,
+        mock_service_class,
+        mock_config_loader,
+        mock_config,
+    ):
+        setup_mocks(mock_schema_config, mock_schema_utils_class, mock_service_class, mock_config_loader, mock_config)
+
+        mock_records = [Mock(id=i) for i in range(1, 6)]
+        # We need to access the mock_service from setup_mocks
+        mock_service_class().raw_data_dao.get_by_validation_status.return_value = mock_records
+
+        cleaner = WikipediaCleaner()
+
+        with patch.object(cleaner, "clean_multiple_records") as mock_clean_multiple:
+            result = cleaner.clean_wikipedia_batch(limit=0)
+
+        mock_clean_multiple.assert_not_called()
+
+    @mock_all_dependencies
+    def test_batch_cleaning_negative_limit(
+        self,
+        mock_schema_config,
+        mock_schema_utils_class,
+        mock_service_class,
+        mock_config_loader,
+        mock_config,
+    ):
+        setup_mocks(mock_schema_config, mock_schema_utils_class, mock_service_class, mock_config_loader, mock_config)
+
+        mock_records = [Mock(id=i) for i in range(1, 6)]
+        # We need to access the mock_service from setup_mocks
+        mock_service_class().raw_data_dao.get_by_validation_status.return_value = mock_records
+
+        cleaner = WikipediaCleaner()
+
+        with patch.object(cleaner, "clean_multiple_records") as mock_clean_multiple:
+            result = cleaner.clean_wikipedia_batch(limit=-1)
+
+        # Negative limit should be treated same as no limit - process all
+        mock_clean_multiple.assert_called_once_with([1, 2, 3, 4, 5])
+
+
+class TestDataIntegrityValidation:
+    @mock_all_dependencies
+    def test_cleaned_data_preserves_original_metadata(
+        self,
+        mock_schema_config,
+        mock_schema_utils_class,
+        mock_service_class,
+        mock_config_loader,
+        mock_config,
+        sample_raw_data,
+    ):
+        setup_mocks(mock_schema_config, mock_schema_utils_class, mock_service_class, mock_config_loader, mock_config)
+
+        cleaner = WikipediaCleaner()
+
+        with patch("epochai.data_processing.cleaners.wikipedia_cleaner.datetime") as mock_datetime:
+            mock_datetime.now.return_value.isoformat.return_value = "2023-01-15T12:00:00Z"
+            result = cleaner.transform_content(sample_raw_data)
+
+        # Should preserve original metadata fields
+        original_metadata = sample_raw_data.metadata
+        for key in original_metadata:
+            assert key in result, f"Original field {key} should be preserved"
+            assert result[key] == original_metadata[key], f"Original value for {key} should be unchanged"
+
+        assert "cleaned_title" in result
+        assert "cleaned_content" in result
+        assert "content_word_count" in result
+
+        assert result["title"] == original_metadata["title"]  # Original should be preserved
+        assert result["cleaned_title"] == cleaner._clean_title(
+            original_metadata["title"],
+        )  # Cleaned should be processed
+
+    @mock_all_dependencies
+    def test_character_counts_accuracy(
+        self,
+        mock_schema_config,
+        mock_schema_utils_class,
+        mock_service_class,
+        mock_config_loader,
+        mock_config,
+    ):
+        setup_mocks(mock_schema_config, mock_schema_utils_class, mock_service_class, mock_config_loader, mock_config)
+
+        test_metadata = {
+            "title": "Test Article",
+            "content": "This is exactly twenty-five characters long.",  # 44 chars
+            "summary": "Short summary.",  # 14 chars
+            "page_id": "12345",
+            "language": "en",
+        }
+
+        raw_data = RawData(
+            id=555,
+            title="Test Article",
+            language_code="en",
+            metadata=test_metadata,
+            validation_status_id=1,
+        )
+
+        cleaner = WikipediaCleaner()
+        result = cleaner.transform_content(raw_data)
+
+        # Verify accurate character counting
+        assert result["content_char_count"] == len(result["cleaned_content"])
+        assert result["original_content_length"] == len(test_metadata["content"])
+
+        # Verify word counting
+        expected_words = len(result["cleaned_content"].split())
+        assert result["content_word_count"] == expected_words
+
+        expected_summary_words = len(result["cleaned_summary"].split())
+        assert result["summary_word_count"] == expected_summary_words
+        assert cleaner.config == mock_config
+        mock_service_class.assert_called_once_with("wikipedia_cleaner", "1.0.0")
+
+    @mock_all_dependencies
+    def test_regex_patterns_compiled(
+        self,
+        mock_schema_config,
+        mock_schema_utils_class,
+        mock_service_class,
+        mock_config_loader,
+        mock_config,
+    ):
+        setup_mocks(mock_schema_config, mock_schema_utils_class, mock_service_class, mock_config_loader, mock_config)
 
         cleaner = WikipediaCleaner()
 
@@ -146,24 +747,23 @@ class TestWikipediaCleanerInitialization:
 
 
 class TestCleanContent:
-    @patch("epochai.data_processing.cleaners.wikipedia_cleaner.ConfigLoader.get_data_config")
-    @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
+    @mock_all_dependencies
     def test_clean_content_success(
         self,
+        mock_schema_config,
+        mock_schema_utils_class,
         mock_service_class,
         mock_config_loader,
         mock_config,
         sample_raw_data,
     ):
-        mock_config_loader.return_value = mock_config
-        mock_service = Mock()
-        mock_service_class.return_value = mock_service
+        setup_mocks(mock_schema_config, mock_schema_utils_class, mock_service_class, mock_config_loader, mock_config)
 
         cleaner = WikipediaCleaner()
 
         with patch("epochai.data_processing.cleaners.wikipedia_cleaner.datetime") as mock_datetime:
             mock_datetime.now.return_value.isoformat.return_value = "2023-01-15T12:00:00Z"
-            result = cleaner.clean_content(sample_raw_data)
+            result = cleaner.transform_content(sample_raw_data)
 
         # Verify cleaned content structure
         assert "cleaned_content" in result
@@ -208,21 +808,20 @@ class TestCleanContent:
         assert isinstance(result["content_char_count"], int)
         assert isinstance(result["summary_word_count"], int)
 
-    @patch("epochai.data_processing.cleaners.wikipedia_cleaner.ConfigLoader.get_data_config")
-    @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
+    @mock_all_dependencies
     def test_clean_content_minimal_data(
         self,
+        mock_schema_config,
+        mock_schema_utils_class,
         mock_service_class,
         mock_config_loader,
         mock_config,
         raw_data_minimal_content,
     ):
-        mock_config_loader.return_value = mock_config
-        mock_service = Mock()
-        mock_service_class.return_value = mock_service
+        setup_mocks(mock_schema_config, mock_schema_utils_class, mock_service_class, mock_config_loader, mock_config)
 
         cleaner = WikipediaCleaner()
-        result = cleaner.clean_content(raw_data_minimal_content)
+        result = cleaner.transform_content(raw_data_minimal_content)
 
         # Should handle minimal content gracefully
         assert "cleaned_content" in result
@@ -230,50 +829,52 @@ class TestCleanContent:
         assert result["content_word_count"] > 0
         assert result["content_char_count"] > 0
 
-    @patch("epochai.data_processing.cleaners.wikipedia_cleaner.ConfigLoader.get_data_config")
-    @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
+    @mock_all_dependencies
     def test_clean_content_no_metadata_raises_error(
         self,
+        mock_schema_config,
+        mock_schema_utils_class,
         mock_service_class,
         mock_config_loader,
         mock_config,
         raw_data_no_metadata,
     ):
-        mock_config_loader.return_value = mock_config
-        mock_service = Mock()
-        mock_service_class.return_value = mock_service
+        setup_mocks(mock_schema_config, mock_schema_utils_class, mock_service_class, mock_config_loader, mock_config)
 
         cleaner = WikipediaCleaner()
 
         with pytest.raises(ValueError, match="Raw data \\(999\\) has no metadata to clean"):
-            cleaner.clean_content(raw_data_no_metadata)
+            cleaner.transform_content(raw_data_no_metadata)
 
-    @patch("epochai.data_processing.cleaners.wikipedia_cleaner.ConfigLoader.get_data_config")
-    @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
+    @mock_all_dependencies
     def test_clean_content_empty_metadata_works(
         self,
+        mock_schema_config,
+        mock_schema_utils_class,
         mock_service_class,
         mock_config_loader,
         mock_config,
         raw_data_empty_metadata,
     ):
-        mock_config_loader.return_value = mock_config
-        mock_service = Mock()
-        mock_service_class.return_value = mock_service
+        setup_mocks(mock_schema_config, mock_schema_utils_class, mock_service_class, mock_config_loader, mock_config)
 
         cleaner = WikipediaCleaner()
 
         with pytest.raises(ValueError, match="Raw data \\(789\\) has no metadata to clean"):
-            cleaner.clean_content(raw_data_empty_metadata)
+            cleaner.transform_content(raw_data_empty_metadata)
 
 
 class TestTextCleaningMethods:
-    @patch("epochai.data_processing.cleaners.wikipedia_cleaner.ConfigLoader.get_data_config")
-    @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_clean_text_content_citations(self, mock_service_class, mock_config_loader, mock_config):
-        mock_config_loader.return_value = mock_config
-        mock_service = Mock()
-        mock_service_class.return_value = mock_service
+    @mock_all_dependencies
+    def test_clean_text_content_citations(
+        self,
+        mock_schema_config,
+        mock_schema_utils_class,
+        mock_service_class,
+        mock_config_loader,
+        mock_config,
+    ):
+        setup_mocks(mock_schema_config, mock_schema_utils_class, mock_service_class, mock_config_loader, mock_config)
 
         cleaner = WikipediaCleaner()
 
@@ -285,12 +886,16 @@ class TestTextCleaningMethods:
         assert "[clarification needed]" not in result
         assert result == "This is a test with citations and clarifications."
 
-    @patch("epochai.data_processing.cleaners.wikipedia_cleaner.ConfigLoader.get_data_config")
-    @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_clean_text_content_unicode_quotes(self, mock_service_class, mock_config_loader, mock_config):
-        mock_config_loader.return_value = mock_config
-        mock_service = Mock()
-        mock_service_class.return_value = mock_service
+    @mock_all_dependencies
+    def test_clean_text_content_unicode_quotes(
+        self,
+        mock_schema_config,
+        mock_schema_utils_class,
+        mock_service_class,
+        mock_config_loader,
+        mock_config,
+    ):
+        setup_mocks(mock_schema_config, mock_schema_utils_class, mock_service_class, mock_config_loader, mock_config)
 
         cleaner = WikipediaCleaner()
 
@@ -311,12 +916,16 @@ class TestTextCleaningMethods:
         assert "\u2018" not in result
         assert "\u2019" not in result
 
-    @patch("epochai.data_processing.cleaners.wikipedia_cleaner.ConfigLoader.get_data_config")
-    @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_clean_text_content_unicode_dashes(self, mock_service_class, mock_config_loader, mock_config):
-        mock_config_loader.return_value = mock_config
-        mock_service = Mock()
-        mock_service_class.return_value = mock_service
+    @mock_all_dependencies
+    def test_clean_text_content_unicode_dashes(
+        self,
+        mock_schema_config,
+        mock_schema_utils_class,
+        mock_service_class,
+        mock_config_loader,
+        mock_config,
+    ):
+        setup_mocks(mock_schema_config, mock_schema_utils_class, mock_service_class, mock_config_loader, mock_config)
 
         cleaner = WikipediaCleaner()
 
@@ -327,17 +936,16 @@ class TestTextCleaningMethods:
         assert "\u2014" not in result
         assert result == "This has an en-dash and an em-dash."
 
-    @patch("epochai.data_processing.cleaners.wikipedia_cleaner.ConfigLoader.get_data_config")
-    @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
+    @mock_all_dependencies
     def test_clean_text_content_whitespace_normalization(
         self,
+        mock_schema_config,
+        mock_schema_utils_class,
         mock_service_class,
         mock_config_loader,
         mock_config,
     ):
-        mock_config_loader.return_value = mock_config
-        mock_service = Mock()
-        mock_service_class.return_value = mock_service
+        setup_mocks(mock_schema_config, mock_schema_utils_class, mock_service_class, mock_config_loader, mock_config)
 
         cleaner = WikipediaCleaner()
 
@@ -346,17 +954,16 @@ class TestTextCleaningMethods:
 
         assert result == "This has multiple spaces and tabs."
 
-    @patch("epochai.data_processing.cleaners.wikipedia_cleaner.ConfigLoader.get_data_config")
-    @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
+    @mock_all_dependencies
     def test_clean_text_content_newline_normalization(
         self,
+        mock_schema_config,
+        mock_schema_utils_class,
         mock_service_class,
         mock_config_loader,
         mock_config,
     ):
-        mock_config_loader.return_value = mock_config
-        mock_service = Mock()
-        mock_service_class.return_value = mock_service
+        setup_mocks(mock_schema_config, mock_schema_utils_class, mock_service_class, mock_config_loader, mock_config)
 
         cleaner = WikipediaCleaner()
 
@@ -365,24 +972,25 @@ class TestTextCleaningMethods:
 
         assert result == "Line 1\n\nLine 2\n\nLine 3"
 
-    @patch("epochai.data_processing.cleaners.wikipedia_cleaner.ConfigLoader.get_data_config")
-    @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_clean_text_content_empty_string(self, mock_service_class, mock_config_loader, mock_config):
-        mock_config_loader.return_value = mock_config
-        mock_service = Mock()
-        mock_service_class.return_value = mock_service
+    @mock_all_dependencies
+    def test_clean_text_content_empty_string(
+        self,
+        mock_schema_config,
+        mock_schema_utils_class,
+        mock_service_class,
+        mock_config_loader,
+        mock_config,
+    ):
+        setup_mocks(mock_schema_config, mock_schema_utils_class, mock_service_class, mock_config_loader, mock_config)
 
         cleaner = WikipediaCleaner()
 
         result = cleaner._clean_text_content("")
         assert result == ""
 
-    @patch("epochai.data_processing.cleaners.wikipedia_cleaner.ConfigLoader.get_data_config")
-    @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_clean_title(self, mock_service_class, mock_config_loader, mock_config):
-        mock_config_loader.return_value = mock_config
-        mock_service = Mock()
-        mock_service_class.return_value = mock_service
+    @mock_all_dependencies
+    def test_clean_title(self, mock_schema_config, mock_schema_utils_class, mock_service_class, mock_config_loader, mock_config):
+        setup_mocks(mock_schema_config, mock_schema_utils_class, mock_service_class, mock_config_loader, mock_config)
 
         cleaner = WikipediaCleaner()
 
@@ -394,12 +1002,16 @@ class TestTextCleaningMethods:
 
 
 class TestCategoryAndLinkCleaning:
-    @patch("epochai.data_processing.cleaners.wikipedia_cleaner.ConfigLoader.get_data_config")
-    @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_clean_categories_deduplication(self, mock_service_class, mock_config_loader, mock_config):
-        mock_config_loader.return_value = mock_config
-        mock_service = Mock()
-        mock_service_class.return_value = mock_service
+    @mock_all_dependencies
+    def test_clean_categories_deduplication(
+        self,
+        mock_schema_config,
+        mock_schema_utils_class,
+        mock_service_class,
+        mock_config_loader,
+        mock_config,
+    ):
+        setup_mocks(mock_schema_config, mock_schema_utils_class, mock_service_class, mock_config_loader, mock_config)
 
         cleaner = WikipediaCleaner()
 
@@ -418,12 +1030,16 @@ class TestCategoryAndLinkCleaning:
         assert "Living people" in result
         assert "Trump family" in result
 
-    @patch("epochai.data_processing.cleaners.wikipedia_cleaner.ConfigLoader.get_data_config")
-    @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_clean_categories_non_string_items(self, mock_service_class, mock_config_loader, mock_config):
-        mock_config_loader.return_value = mock_config
-        mock_service = Mock()
-        mock_service_class.return_value = mock_service
+    @mock_all_dependencies
+    def test_clean_categories_non_string_items(
+        self,
+        mock_schema_config,
+        mock_schema_utils_class,
+        mock_service_class,
+        mock_config_loader,
+        mock_config,
+    ):
+        setup_mocks(mock_schema_config, mock_schema_utils_class, mock_service_class, mock_config_loader, mock_config)
 
         cleaner = WikipediaCleaner()
 
@@ -441,36 +1057,48 @@ class TestCategoryAndLinkCleaning:
         assert "Valid category" in result
         assert "Another valid category" in result
 
-    @patch("epochai.data_processing.cleaners.wikipedia_cleaner.ConfigLoader.get_data_config")
-    @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_clean_categories_empty_list(self, mock_service_class, mock_config_loader, mock_config):
-        mock_config_loader.return_value = mock_config
-        mock_service = Mock()
-        mock_service_class.return_value = mock_service
+    @mock_all_dependencies
+    def test_clean_categories_empty_list(
+        self,
+        mock_schema_config,
+        mock_schema_utils_class,
+        mock_service_class,
+        mock_config_loader,
+        mock_config,
+    ):
+        setup_mocks(mock_schema_config, mock_schema_utils_class, mock_service_class, mock_config_loader, mock_config)
 
         cleaner = WikipediaCleaner()
 
         result = cleaner._clean_categories([])
         assert result == []
 
-    @patch("epochai.data_processing.cleaners.wikipedia_cleaner.ConfigLoader.get_data_config")
-    @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_clean_categories_none_input(self, mock_service_class, mock_config_loader, mock_config):
-        mock_config_loader.return_value = mock_config
-        mock_service = Mock()
-        mock_service_class.return_value = mock_service
+    @mock_all_dependencies
+    def test_clean_categories_none_input(
+        self,
+        mock_schema_config,
+        mock_schema_utils_class,
+        mock_service_class,
+        mock_config_loader,
+        mock_config,
+    ):
+        setup_mocks(mock_schema_config, mock_schema_utils_class, mock_service_class, mock_config_loader, mock_config)
 
         cleaner = WikipediaCleaner()
 
         result = cleaner._clean_categories(None)
         assert result == []
 
-    @patch("epochai.data_processing.cleaners.wikipedia_cleaner.ConfigLoader.get_data_config")
-    @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_clean_links_deduplication(self, mock_service_class, mock_config_loader, mock_config):
-        mock_config_loader.return_value = mock_config
-        mock_service = Mock()
-        mock_service_class.return_value = mock_service
+    @mock_all_dependencies
+    def test_clean_links_deduplication(
+        self,
+        mock_schema_config,
+        mock_schema_utils_class,
+        mock_service_class,
+        mock_config_loader,
+        mock_config,
+    ):
+        setup_mocks(mock_schema_config, mock_schema_utils_class, mock_service_class, mock_config_loader, mock_config)
 
         cleaner = WikipediaCleaner()
 
@@ -489,12 +1117,16 @@ class TestCategoryAndLinkCleaning:
         assert "Ivana Trump" in result
         assert "Eric Trump" in result
 
-    @patch("epochai.data_processing.cleaners.wikipedia_cleaner.ConfigLoader.get_data_config")
-    @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_clean_links_non_string_items(self, mock_service_class, mock_config_loader, mock_config):
-        mock_config_loader.return_value = mock_config
-        mock_service = Mock()
-        mock_service_class.return_value = mock_service
+    @mock_all_dependencies
+    def test_clean_links_non_string_items(
+        self,
+        mock_schema_config,
+        mock_schema_utils_class,
+        mock_service_class,
+        mock_config_loader,
+        mock_config,
+    ):
+        setup_mocks(mock_schema_config, mock_schema_utils_class, mock_service_class, mock_config_loader, mock_config)
 
         cleaner = WikipediaCleaner()
 
@@ -513,12 +1145,9 @@ class TestCategoryAndLinkCleaning:
 
 
 class TestUtilityMethods:
-    @patch("epochai.data_processing.cleaners.wikipedia_cleaner.ConfigLoader.get_data_config")
-    @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_count_words(self, mock_service_class, mock_config_loader, mock_config):
-        mock_config_loader.return_value = mock_config
-        mock_service = Mock()
-        mock_service_class.return_value = mock_service
+    @mock_all_dependencies
+    def test_count_words(self, mock_schema_config, mock_schema_utils_class, mock_service_class, mock_config_loader, mock_config):
+        setup_mocks(mock_schema_config, mock_schema_utils_class, mock_service_class, mock_config_loader, mock_config)
 
         cleaner = WikipediaCleaner()
 
@@ -528,12 +1157,16 @@ class TestUtilityMethods:
         assert cleaner._count_words("   ") == 0
         assert cleaner._count_words("Multiple   spaces   between") == 3
 
-    @patch("epochai.data_processing.cleaners.wikipedia_cleaner.ConfigLoader.get_data_config")
-    @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_get_cleaning_operations_list(self, mock_service_class, mock_config_loader, mock_config):
-        mock_config_loader.return_value = mock_config
-        mock_service = Mock()
-        mock_service_class.return_value = mock_service
+    @mock_all_dependencies
+    def test_get_cleaning_operations_list(
+        self,
+        mock_schema_config,
+        mock_schema_utils_class,
+        mock_service_class,
+        mock_config_loader,
+        mock_config,
+    ):
+        setup_mocks(mock_schema_config, mock_schema_utils_class, mock_service_class, mock_config_loader, mock_config)
 
         cleaner = WikipediaCleaner()
 
@@ -552,12 +1185,22 @@ class TestUtilityMethods:
 
 
 class TestCleanWikipediaBatch:
-    @patch("epochai.data_processing.cleaners.wikipedia_cleaner.ConfigLoader.get_data_config")
-    @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_clean_wikipedia_batch_success(self, mock_service_class, mock_config_loader, mock_config):
-        mock_config_loader.return_value = mock_config
-        mock_service = Mock()
-        mock_service_class.return_value = mock_service
+    @mock_all_dependencies
+    def test_clean_wikipedia_batch_success(
+        self,
+        mock_schema_config,
+        mock_schema_utils_class,
+        mock_service_class,
+        mock_config_loader,
+        mock_config,
+    ):
+        mock_service = setup_mocks(
+            mock_schema_config,
+            mock_schema_utils_class,
+            mock_service_class,
+            mock_config_loader,
+            mock_config,
+        )
 
         # Mock raw data records
         mock_raw_records = [
@@ -580,512 +1223,25 @@ class TestCleanWikipediaBatch:
         mock_clean_multiple.assert_called_once_with([1, 2, 3])
         assert result == {"success_count": 3}
 
-    @patch("epochai.data_processing.cleaners.wikipedia_cleaner.ConfigLoader.get_data_config")
-    @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_clean_wikipedia_batch_with_limit(self, mock_service_class, mock_config_loader, mock_config):
-        mock_config_loader.return_value = mock_config
-        mock_service = Mock()
-        mock_service_class.return_value = mock_service
+    @mock_all_dependencies
+    def test_clean_wikipedia_batch_with_limit(
+        self,
+        mock_schema_config,
+        mock_schema_utils_class,
+        mock_service_class,
+        mock_config_loader,
+        mock_config,
+    ):
+        mock_service = setup_mocks(
+            mock_schema_config,
+            mock_schema_utils_class,
+            mock_service_class,
+            mock_config_loader,
+            mock_config,
+        )
 
         # Mock 5 records but limit to 2
         mock_raw_records = [Mock(id=i) for i in range(1, 6)]
         mock_service.raw_data_dao.get_by_validation_status.return_value = mock_raw_records
 
         cleaner = WikipediaCleaner()
-
-        with patch.object(
-            cleaner,
-            "clean_multiple_records",
-            return_value={"success_count": 2},
-        ) as mock_clean_multiple:
-            result = cleaner.clean_wikipedia_batch(limit=2)
-
-        mock_clean_multiple.assert_called_once_with([1, 2])  # Only first 2 IDs
-        assert result == {"success_count": 2}
-
-    @patch("epochai.data_processing.cleaners.wikipedia_cleaner.ConfigLoader.get_data_config")
-    @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_clean_wikipedia_batch_no_records(self, mock_service_class, mock_config_loader, mock_config):
-        mock_config_loader.return_value = mock_config
-        mock_service = Mock()
-        mock_service_class.return_value = mock_service
-
-        mock_service.raw_data_dao.get_by_validation_status.return_value = []
-
-        cleaner = WikipediaCleaner()
-        result = cleaner.clean_wikipedia_batch()
-
-        expected_result = {
-            "success_count": 0,
-            "error_count": 0,
-            "cleaned_ids": [],
-            "error_ids": [],
-        }
-        assert result == expected_result
-
-
-class TestIntegrationScenarios:
-    @patch("epochai.data_processing.cleaners.wikipedia_cleaner.ConfigLoader.get_data_config")
-    @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_full_cleaning_process_complex_content(self, mock_service_class, mock_config_loader, mock_config):
-        mock_config_loader.return_value = mock_config
-        mock_service = Mock()
-        mock_service_class.return_value = mock_service
-
-        # Complex raw data with many edge cases
-        complex_metadata = {
-            "title": "Test Article[1]   ",
-            "summary": "This is a summary[citation needed] with \u201csmart quotes\u201d and em\u2014dashes.",
-            "content": "This is content[1][2][clarification needed] with\n\n\n\nmultiple newlines and   extra   spaces. It has \u2018single quotes\u2019 and en\u2013dashes too.",
-            "categories": [
-                "Category 1",
-                "Category 1",  # Duplicate
-                123,  # Non-string
-                "   Category 2   ",  # Whitespace
-                "",  # Empty string
-                "Category 2",  # Duplicate after cleaning
-            ],
-            "links": [
-                "Link 1",
-                "Link 1",  # Duplicate
-                None,  # Non-string
-                "   Link 2   ",  # Whitespace
-                "Link 2",  # Duplicate after cleaning
-            ],
-            "page_id": "12345",
-            "language": "en",
-        }
-
-        raw_data = RawData(
-            id=999,
-            title="Test Article",
-            language_code="en",
-            metadata=complex_metadata,
-            validation_status_id=1,
-        )
-
-        cleaner = WikipediaCleaner()
-
-        with patch("epochai.data_processing.cleaners.wikipedia_cleaner.datetime") as mock_datetime:
-            mock_datetime.now.return_value.isoformat.return_value = "2023-01-15T12:00:00Z"
-            result = cleaner.clean_content(raw_data)
-
-        # Verify comprehensive cleaning
-        assert result["cleaned_title"] == "Test Article"
-        assert "[citation needed]" not in result["cleaned_summary"]
-        assert "\u201c" not in result["cleaned_summary"]  # Smart quotes normalized
-        assert "\u2014" not in result["cleaned_summary"]  # Em dash normalized
-
-        assert "[1]" not in result["cleaned_content"]
-        assert "[clarification needed]" not in result["cleaned_content"]
-        assert "\n\n\n\n" not in result["cleaned_content"]  # Multiple newlines normalized
-        assert "   extra   " not in result["cleaned_content"]  # Multiple spaces normalized
-
-        # Verify deduplication and filtering
-        assert len(result["cleaned_categories"]) == 2  # Only "Category 1" and "Category 2"
-        assert len(result["cleaned_links"]) == 2  # Only "Link 1" and "Link 2"
-
-        # Verify counts
-        assert result["category_count"] == 2
-        assert result["internal_link_count"] == 2
-        assert result["content_word_count"] > 0
-        assert result["summary_word_count"] > 0
-
-    @patch("epochai.data_processing.cleaners.wikipedia_cleaner.ConfigLoader.get_data_config")
-    @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_missing_optional_fields(self, mock_service_class, mock_config_loader, mock_config):
-        mock_config_loader.return_value = mock_config
-        mock_service = Mock()
-        mock_service_class.return_value = mock_service
-
-        # Metadata with only required fields
-        minimal_metadata = {
-            "title": "Minimal Article",
-            "content": "This is minimal content.",
-            "page_id": "67890",
-            "language": "en",
-            # Missing: summary, categories, links
-        }
-
-        raw_data = RawData(
-            id=888,
-            title="Minimal Article",
-            language_code="en",
-            metadata=minimal_metadata,
-            validation_status_id=1,
-        )
-
-        cleaner = WikipediaCleaner()
-
-        with patch("epochai.data_processing.cleaners.wikipedia_cleaner.datetime") as mock_datetime:
-            mock_datetime.now.return_value.isoformat.return_value = "2023-01-15T12:00:00Z"
-            result = cleaner.clean_content(raw_data)
-
-        # Should handle missing optional fields gracefully
-        assert result["cleaned_title"] == "Minimal Article"
-        assert result["cleaned_content"] == "This is minimal content."
-        assert "cleaned_summary" not in result
-        assert "cleaned_categories" not in result
-        assert "cleaned_links" not in result
-
-        # Counts should still be calculated
-        assert result["content_word_count"] == 4
-        assert result["content_char_count"] == len("This is minimal content.")
-        assert result["original_content_length"] == len("This is minimal content.")
-
-
-class TestErrorHandling:
-    @patch("epochai.data_processing.cleaners.wikipedia_cleaner.ConfigLoader.get_data_config")
-    @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_malformed_metadata_structure(self, mock_service_class, mock_config_loader, mock_config):
-        mock_config_loader.return_value = mock_config
-        mock_service = Mock()
-        mock_service_class.return_value = mock_service
-
-        # Metadata with unexpected structure
-        malformed_metadata = {
-            "title": {"nested": "title"},  # Should be string
-            "content": ["list", "instead", "of", "string"],  # Should be string
-            "categories": "string instead of list",  # Should be list
-            "links": {"dict": "instead of list"},  # Should be list
-            "page_id": "12345",
-            "language": "en",
-        }
-
-        raw_data = RawData(
-            id=777,
-            title="Malformed Article",
-            language_code="en",
-            metadata=malformed_metadata,
-            validation_status_id=1,
-        )
-
-        cleaner = WikipediaCleaner()
-
-        # Should handle malformed data without crashing
-        with patch("epochai.data_processing.cleaners.wikipedia_cleaner.datetime") as mock_datetime:
-            mock_datetime.now.return_value.isoformat.return_value = "2023-01-15T12:00:00Z"
-            result = cleaner.clean_content(raw_data)
-
-        # Should still return a valid result structure
-        assert "cleaning_operations_applied" in result
-        assert "cleaned_at" in result
-        assert "original_content_length" in result
-
-    @patch("epochai.data_processing.cleaners.wikipedia_cleaner.ConfigLoader.get_data_config")
-    @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_extremely_long_content(self, mock_service_class, mock_config_loader, mock_config):
-        mock_config_loader.return_value = mock_config
-        mock_service = Mock()
-        mock_service_class.return_value = mock_service
-
-        # Very long content to test performance
-        long_content = "This is a very long article. " * 1000  # 30,000 characters
-        long_metadata = {
-            "title": "Long Article",
-            "content": long_content,
-            "summary": "This is a long summary. " * 50,  # 1,200 characters
-            "categories": [f"Category {i}" for i in range(100)],  # 100 categories
-            "links": [f"Link {i}" for i in range(200)],  # 200 links
-            "page_id": "99999",
-            "language": "en",
-        }
-
-        raw_data = RawData(
-            id=666,
-            title="Long Article",
-            language_code="en",
-            metadata=long_metadata,
-            validation_status_id=1,
-        )
-
-        cleaner = WikipediaCleaner()
-
-        with patch("epochai.data_processing.cleaners.wikipedia_cleaner.datetime") as mock_datetime:
-            mock_datetime.now.return_value.isoformat.return_value = "2023-01-15T12:00:00Z"
-            result = cleaner.clean_content(raw_data)
-
-        # Should handle large content without issues
-        assert len(result["cleaned_content"]) > 0
-        assert result["content_word_count"] > 0
-        assert result["category_count"] == 100
-        assert result["internal_link_count"] == 200
-        assert result["original_content_length"] == len(long_content)
-
-
-class TestRegexPatternMatching:
-    @patch("epochai.data_processing.cleaners.wikipedia_cleaner.ConfigLoader.get_data_config")
-    @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_citation_pattern_comprehensive(self, mock_service_class, mock_config_loader, mock_config):
-        mock_config_loader.return_value = mock_config
-        mock_service = Mock()
-        mock_service_class.return_value = mock_service
-
-        cleaner = WikipediaCleaner()
-
-        # Test various citation formats
-        test_cases = [
-            ("Text[1]", "Text"),
-            ("Text[123]", "Text"),
-            ("Text[citation needed]", "Text"),
-            ("Text[clarification needed]", "Text"),
-            ("Text[1][2][3]", "Text"),
-            ("Text[citation needed][clarification needed]", "Text"),
-            ("Text [1] more text [2]", "Text  more text "),
-        ]
-
-        for input_text, expected in test_cases:
-            result = cleaner._clean_text_content(input_text)
-            # Remove extra spaces that might be left after citation removal
-            result = " ".join(result.split())
-            expected = " ".join(expected.split())
-            assert result == expected, f"Failed for input: {input_text}"
-
-    @patch("epochai.data_processing.cleaners.wikipedia_cleaner.ConfigLoader.get_data_config")
-    @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_unicode_normalization_comprehensive(self, mock_service_class, mock_config_loader, mock_config):
-        mock_config_loader.return_value = mock_config
-        mock_service = Mock()
-        mock_service_class.return_value = mock_service
-
-        cleaner = WikipediaCleaner()
-
-        # Test various unicode characters
-        test_cases = [
-            # Smart quotes
-            ("\u201cquoted text\u201d", '"quoted text"'),
-            ("\u2018single quoted\u2019", "'single quoted'"),
-            # Dashes
-            ("en\u2013dash", "en-dash"),
-            ("em\u2014dash", "em-dash"),
-            # Mixed
-            ("\u201cHe said\u2014\u2018hello\u2019\u201d", "\"He said-'hello'\""),
-        ]
-
-        for input_text, expected in test_cases:
-            result = cleaner._clean_text_content(input_text)
-            assert result == expected, f"Failed for input: {input_text}"
-
-    @patch("epochai.data_processing.cleaners.wikipedia_cleaner.ConfigLoader.get_data_config")
-    @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_whitespace_normalization_edge_cases(self, mock_service_class, mock_config_loader, mock_config):
-        mock_config_loader.return_value = mock_config
-        mock_service = Mock()
-        mock_service_class.return_value = mock_service
-
-        cleaner = WikipediaCleaner()
-
-        # Test various whitespace scenarios
-        test_cases = [
-            ("word1   word2", "word1 word2"),
-            ("word1\t\tword2", "word1 word2"),
-            ("word1\n word2", "word1\n word2"),
-            ("word1 \t\n  word2", "word1 \n word2"),
-            ("   leading and trailing   ", "leading and trailing"),
-        ]
-
-        for input_text, expected in test_cases:
-            result = cleaner._clean_text_content(input_text)
-            assert result == expected, f"Failed for input: {input_text!r}"
-
-
-class TestConfigurationIntegration:
-    @patch("epochai.data_processing.cleaners.wikipedia_cleaner.ConfigLoader.get_data_config")
-    @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_config_values_used_correctly(self, mock_service_class, mock_config_loader, mock_config):
-        modified_config = {
-            "cleaners": {
-                "wikipedia": {
-                    "cleaner_name": "custom_wikipedia_cleaner",
-                    "current_version": "2.5.0",
-                    "schema_cache_limit": 10,
-                    "schema_check_interval": 15,
-                },
-            },
-        }
-
-        mock_config_loader.return_value = modified_config
-        mock_service = Mock()
-        mock_service_class.return_value = mock_service
-
-        cleaner = WikipediaCleaner()
-
-        # Verify the custom config values are used
-        assert cleaner.cleaner_name == "custom_wikipedia_cleaner"
-        assert cleaner.cleaner_version == "2.5.0"
-        assert cleaner.config == modified_config
-
-        # Verify CleaningService was initialized with correct values
-        mock_service_class.assert_called_once_with("custom_wikipedia_cleaner", "2.5.0")
-
-    @patch("epochai.data_processing.cleaners.wikipedia_cleaner.ConfigLoader.get_data_config")
-    @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_missing_config_section_raises_error(self, mock_service_class, mock_config_loader):
-        # Config missing wikipedia section
-        incomplete_config = {
-            "cleaners": {
-                "other_cleaner": {
-                    "cleaner_name": "other",
-                    "current_version": "1.0.0",
-                },
-            },
-        }
-
-        mock_config_loader.return_value = incomplete_config
-        mock_service = Mock()
-        mock_service_class.return_value = mock_service
-
-        # Should raise error when trying to access missing config
-        with pytest.raises((KeyError, AttributeError)):
-            WikipediaCleaner()
-
-
-class TestBatchOperationsIntegration:
-    @patch("epochai.data_processing.cleaners.wikipedia_cleaner.ConfigLoader.get_data_config")
-    @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_batch_cleaning_with_mixed_record_types(
-        self,
-        mock_service_class,
-        mock_config_loader,
-        mock_config,
-    ):
-        mock_config_loader.return_value = mock_config
-        mock_service = Mock()
-        mock_service_class.return_value = mock_service
-
-        # Mock records with different characteristics
-        mock_records = [
-            Mock(id=1),  # Normal record
-            Mock(id=2),  # Record that might fail
-            Mock(id=3),  # Another normal record
-            Mock(id=None),  # Record with no ID (should be filtered)
-        ]
-        mock_service.raw_data_dao.get_by_validation_status.return_value = mock_records
-
-        cleaner = WikipediaCleaner()
-
-        expected_batch_result = {
-            "success_count": 2,
-            "error_count": 1,
-            "cleaned_ids": [101, 103],
-            "error_ids": [2],
-        }
-
-        with patch.object(
-            cleaner,
-            "clean_multiple_records",
-            return_value=expected_batch_result,
-        ) as mock_clean_multiple:
-            result = cleaner.clean_wikipedia_batch()
-
-        # Should filter out None IDs
-        mock_clean_multiple.assert_called_once_with([1, 2, 3])
-        assert result == expected_batch_result
-
-    @patch("epochai.data_processing.cleaners.wikipedia_cleaner.ConfigLoader.get_data_config")
-    @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_batch_cleaning_zero_limit(self, mock_service_class, mock_config_loader, mock_config):
-        mock_config_loader.return_value = mock_config
-        mock_service = Mock()
-        mock_service_class.return_value = mock_service
-
-        mock_records = [Mock(id=i) for i in range(1, 6)]
-        mock_service.raw_data_dao.get_by_validation_status.return_value = mock_records
-
-        cleaner = WikipediaCleaner()
-
-        with patch.object(cleaner, "clean_multiple_records") as mock_clean_multiple:
-            result = cleaner.clean_wikipedia_batch(limit=0)
-
-        mock_clean_multiple.assert_not_called()
-
-    @patch("epochai.data_processing.cleaners.wikipedia_cleaner.ConfigLoader.get_data_config")
-    @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_batch_cleaning_negative_limit(self, mock_service_class, mock_config_loader, mock_config):
-        mock_config_loader.return_value = mock_config
-        mock_service = Mock()
-        mock_service_class.return_value = mock_service
-
-        mock_records = [Mock(id=i) for i in range(1, 6)]
-        mock_service.raw_data_dao.get_by_validation_status.return_value = mock_records
-
-        cleaner = WikipediaCleaner()
-
-        with patch.object(cleaner, "clean_multiple_records") as mock_clean_multiple:
-            result = cleaner.clean_wikipedia_batch(limit=-1)
-
-        # Negative limit should be treated same as no limit - process all
-        mock_clean_multiple.assert_called_once_with([1, 2, 3, 4, 5])
-
-
-class TestDataIntegrityValidation:
-    @patch("epochai.data_processing.cleaners.wikipedia_cleaner.ConfigLoader.get_data_config")
-    @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_cleaned_data_preserves_original_metadata(
-        self,
-        mock_service_class,
-        mock_config_loader,
-        mock_config,
-        sample_raw_data,
-    ):
-        mock_config_loader.return_value = mock_config
-        mock_service = Mock()
-        mock_service_class.return_value = mock_service
-
-        cleaner = WikipediaCleaner()
-
-        with patch("epochai.data_processing.cleaners.wikipedia_cleaner.datetime") as mock_datetime:
-            mock_datetime.now.return_value.isoformat.return_value = "2023-01-15T12:00:00Z"
-            result = cleaner.clean_content(sample_raw_data)
-
-        # Should preserve original metadata fields
-        original_metadata = sample_raw_data.metadata
-        for key in original_metadata:
-            assert key in result, f"Original field {key} should be preserved"
-            assert result[key] == original_metadata[key], f"Original value for {key} should be unchanged"
-
-        assert "cleaned_title" in result
-        assert "cleaned_content" in result
-        assert "content_word_count" in result
-
-        assert result["title"] == original_metadata["title"]  # Original should be preserved
-        assert result["cleaned_title"] == cleaner._clean_title(
-            original_metadata["title"],
-        )  # Cleaned should be processed
-
-    @patch("epochai.data_processing.cleaners.wikipedia_cleaner.ConfigLoader.get_data_config")
-    @patch("epochai.data_processing.cleaners.base_cleaner.CleaningService")
-    def test_character_counts_accuracy(self, mock_service_class, mock_config_loader, mock_config):
-        mock_config_loader.return_value = mock_config
-        mock_service = Mock()
-        mock_service_class.return_value = mock_service
-
-        test_metadata = {
-            "title": "Test Article",
-            "content": "This is exactly twenty-five characters long.",  # 44 chars
-            "summary": "Short summary.",  # 14 chars
-            "page_id": "12345",
-            "language": "en",
-        }
-
-        raw_data = RawData(
-            id=555,
-            title="Test Article",
-            language_code="en",
-            metadata=test_metadata,
-            validation_status_id=1,
-        )
-
-        cleaner = WikipediaCleaner()
-        result = cleaner.clean_content(raw_data)
-
-        # Verify accurate character counting
-        assert result["content_char_count"] == len(result["cleaned_content"])
-        assert result["original_content_length"] == len(test_metadata["content"])
-
-        # Verify word counting
-        expected_words = len(result["cleaned_content"].split())
-        assert result["content_word_count"] == expected_words
-
-        expected_summary_words = len(result["cleaned_summary"].split())
-        assert result["summary_word_count"] == expected_summary_words

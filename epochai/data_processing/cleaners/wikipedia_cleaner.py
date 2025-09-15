@@ -13,19 +13,18 @@ class WikipediaCleaner(BaseCleaner):
 
         super().__init__(
             cleaner_name=self.config.get("cleaners").get("wikipedia").get("cleaner_name"),
-            cleaner_version=self.config.get("cleaners").get("wikipedia").get("current_version"),
+            cleaner_version=self.config.get("cleaners").get("wikipedia").get("current_schema_version"),
         )
 
-        # FALL BACK CLEANING PROCESS VARS
         self._multiple_whitespace_pattern = re.compile(r"[ \t]+")
         self._citation_pattern = re.compile(r"\[\d+\]|\[citation needed\]|\[clarification needed\]")
         self._unicode_quotes_pattern = re.compile(r"[\u201c\u201d\u2018\u2019]")
         self._unicode_dashes_pattern = re.compile(r"[–—]")  # noqa
         self._multiple_newlines_pattern = re.compile(r"\n{3,}")
 
-        self.logger.info(f"Wikipedia Cleaner Initialized ({self.get_metadata_schema_id()})")
+        self.logger.info(f"Wikipedia Cleaner Initialized ({self._schema_utils.get_metadata_schema_id()})")
 
-    def clean_content(self, raw_data: RawData) -> Dict[str, Any]:
+    def transform_content(self, raw_data: RawData) -> Dict[str, Any]:
         """
         Cleans Wikipedia Raw Data
 

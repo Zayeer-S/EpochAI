@@ -36,7 +36,9 @@ def setup_logging(log_level="INFO", log_to_file=True, log_dir="logs"):
 
     if log_to_file:
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        log_filename = f"predictai_{timestamp}.log"
+        project_name = os.path.basename(project_root).lower()
+
+        log_filename = f"{project_name}_{timestamp}.log"
         log_filepath = os.path.join(log_dir, log_filename)
 
         file_handler = logging.FileHandler(log_filepath)

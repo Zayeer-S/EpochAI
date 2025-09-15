@@ -14,7 +14,7 @@ class WikipediaUtils:
         self,
         config,
     ):
-        self.config = config
+        self.yaml_config = config
         self.logger = get_logger(__name__)
 
         self.current_language = None
@@ -38,7 +38,7 @@ class WikipediaUtils:
             self.logger.warning(f"No search results found for '{page_title}'")
             return None
 
-        max_results = self.config["api"]["search_max_results"]
+        max_results = self.yaml_config["api"]["search_max_results"]
 
         attempted_search_results = set()
 
@@ -92,7 +92,7 @@ class WikipediaUtils:
             List of pages title from search results
         """
 
-        search_max_results = self.config["api"]["search_max_results"]
+        search_max_results = self.yaml_config["api"]["search_max_results"]
 
         if not self.switch_language(language_code):
             return []  # no error log here as switch_language will log it itself
@@ -138,7 +138,7 @@ class WikipediaUtils:
 
     def process_items_by_language(
         self,
-        items_by_language_code: Dict[str, List[str]],
+        items_by_language_code: Dict[str, Dict[str, int]],
         process_func: Callable,
     ) -> Dict[str, List[Any]]:
         """
@@ -146,8 +146,16 @@ class WikipediaUtils:
         Uses process_func to call a relevant function.
 
         Args:
-            process_func: Function that is called for each item. Must accept 2 parameters:
-                (item: str, language_code: str) and returns result or None
+            items_by_language_code:
+                {"language_code":
+                    {"first_collection_name": id_of_first_collection_name},
+                    {"second_collection_name": id_of_second_collection_name}
+                }
+            process_func: Function that is called for each item. Must accept 3 parameters:
+                (item: str,
+                language_code: str,
+                collection_target_id: int,
+                ) -> result or None
 
         Returns:
             Dict mapping language codes to a nullable list
@@ -157,8 +165,8 @@ class WikipediaUtils:
 
         results_by_language: Dict[str, List[Any]] = {}
 
-        for language_code, items in items_by_language_code.items():
-            if not items:
+        for language_code, items_dict in items_by_language_code.items():
+            if not items_dict:
                 self.logger.warning(
                     f"No items for this language '{language_code}', skipping this language...",
                 )
@@ -170,16 +178,16 @@ class WikipediaUtils:
 
             results_by_language[language_code] = []
 
-            for item in items:
+            for item_name, collection_target_id in items_dict.items():
                 try:
-                    result = process_func(item, language_code)
+                    result = process_func(item_name, language_code, collection_target_id)
                     if result:
                         results_by_language[language_code].append(result)
 
-                    time.sleep(self.config["api"]["rate_limit_delay"])
+                    time.sleep(self.yaml_config["api"]["rate_limit_delay"])
 
                 except Exception as general_error:
-                    self.logger.error(f"Error processing '{item} in '{language_code}': {general_error}")
+                    self.logger.error(f"Error processing '{item_name} in '{language_code}': {general_error}")
                     continue
 
         return results_by_language
@@ -194,19 +202,19 @@ class WikipediaUtils:
         """
         Handles disambiguation errors by trying different options
         """
-        max_retries = int(self.config["api"]["max_retries"])
-        search_max_results = int(self.config["api"]["search_max_results"])
+        max_retries = int(self.yaml_config["api"]["max_retries"])
+        search_max_results = int(self.yaml_config["api"]["search_max_results"])
 
         if recursive_limit is None:
-            recursive_limit = self.config["api"]["recursive_limit"]
+            recursive_limit = self.yaml_config["api"]["recursive_limit"]
         elif recursive_limit <= 0:
             self.logger.warning(
-                f"Recursive limit reached for '{page_title}' in function {self.handle_any_disambiguation_error.__name__}",  # noqa
+                f"Recursive limit reached for '{page_title}' in function {self.handle_any_disambiguation_error.__name__}",
             )
             return None
 
         self.logger.warning(
-            f"Disambiguation for page title '{page_title}' in '{language_code}'. Options: {options[:search_max_results]}",  # noqa
+            f"Disambiguation for page title '{page_title}' in '{language_code}'. Options: {options[:search_max_results]}",
         )
 
         for option in options[:max_retries]:
@@ -241,7 +249,7 @@ class WikipediaUtils:
         self.logger.error(f"Could not resolve disambiguation error for '{page_title}'")
         return None
 
-    def get_wikipedia_page(
+    def get_page(
         self,
         page_title: str,
         language_code: str,
@@ -297,12 +305,12 @@ class WikipediaUtils:
         Returns:
             Optional[Dict[str, Any]]: Page meta data or "None" if result is null
         """
-        max_retries = self.config["api"]["max_retries"]
-        rate_limit_delay = self.config["api"]["rate_limit_delay"]
+        max_retries = self.yaml_config["api"]["max_retries"]
+        rate_limit_delay = self.yaml_config["api"]["rate_limit_delay"]
 
         for attempt in range(max_retries):
             try:
-                page = self.get_wikipedia_page(page_title, language_code)
+                page = self.get_page(page_title, language_code)
 
                 if page is None:
                     self.logger.warning(f"Could not retrieve '{page_title}' in language '{language_code}'")

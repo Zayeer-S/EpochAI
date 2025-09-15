@@ -7,7 +7,7 @@ EpochAI/
 ├── .pre-commit-config.yaml                                 # pre-commit's config
 ├── config.yml                                              # Configuration settings
 ├── constraints.yml                                         # Constraint configuration settings
-├── pyproject.toml
+├── pyproject.toml                                          # Pre-commit, ruff and mypy
 ├── README.md                                               # Project overview and documentation
 ├── requirements.txt                                        # Python dependencies
 ├── setup.py                                                # Package installation setup
@@ -48,19 +48,18 @@ EpochAI/
 │   └── USER_GUIDE.md
 │
 ├── notebooks/                                              # Jupyter notebooks
-│   ├── data_exploration.ipynb
-│   ├── model_evaluation.ipynb
-│   └── visualization.ipynb
+│   └── (empty)
 │
 ├── epochai/                                                # Main package directory
 │   ├── __init__.py
 │   ├── common/                                             # Shared utilities
 │   │   ├── __init__.py
+│   │   ├── enums.py                                        # Centralized store of all enums
 │   │   ├── logging_config.py                               # Creates a centralized logger for the project
 │   │   ├── config/                                         # Config loading and validation
 │   │   │   ├── __init__.py
 │   │   │   ├── config_loader.py                            # Loads config.yml and validates by calling config_validator.py
-│   │   │   └── config_validator.py                         # Validates config and returns error messages if invalid
+│   │   │   └── config_validator.py                         # Validates config via pydantic and returns error messages if invalid
 │   │   ├── database/                                       # Everything database related
 │   │   │   ├── __init__.py
 │   │   │   ├── collection_config_manager.py                # Data service layer file for various collection_config_id related functionality
@@ -69,13 +68,13 @@ EpochAI/
 │   │   │   ├── dao/
 │   │   │   │   ├── __init__.py
 │   │   │   │   ├── attempt_statuses_dao.py                 # attempt_statuses_table DAO
+│   │   │   │   ├── check_collection_targets_dao.py         # check_collection_targets table DAO
 │   │   │   │   ├── cleaned_data_dao.py                     # cleaned_data table DAO
 │   │   │   │   ├── cleaned_data_metadata_schemas_dao.py    # cleaned_data_metadata_schemas table DAO
 │   │   │   │   ├── collection_attempts_dao.py              # collection_attempts table DAO
 │   │   │   │   ├── collection_targets_dao.py               # collection_configs table DAO
 │   │   │   │   ├── collection_types_dao.py                 # collection_types table DAO
 │   │   │   │   ├── collector_names_dao.py                  # collector_names table DAO
-│   │   │   │   ├── debug_wikipedia_results_dao.py          # debug_wikipedia_results table DAO
 │   │   │   │   ├── error_types_dao.py                      # error_types table DAO
 │   │   │   │   ├── link_attempts_to_runs_dao.py            # link_attempts_to_runs table DAO
 │   │   │   │   ├── raw_data_dao.py                         # raw_data_dao table DAO
@@ -91,17 +90,36 @@ EpochAI/
 │   │   │       ├── COMMANDS.md                             # Alembic commands cheat sheet
 │   │   │       ├── env.py                                  # Alembic created file, contains custom code to get database credentials from .env
 │   │   │       └── script.py.maki                          # Alembic created file on install
+│   │   ├── protocols/
+│   │   │   ├── __init__.py
+│   │   │   └── metadata_schema_dao_protocol.py             # Protocol ensuring schema_utils has consistent access to metadata schema DAOs
+│   │   ├── services/                                       # Database service layers
+│   │   │   ├── __init__.py
+│   │   │   ├── cleaning_service.py
+│   │   │   ├── collection_attempts_service.py
+│   │   │   ├── collection_reports_service.py
+│   │   │   ├── collection_targets_query_service.py
+│   │   │   ├── raw_data_service.py
+│   │   │   ├── target_status_management_service.py
 │   │   └── utils/                                          # Collector Utils
 │   │       ├── __init.py__
 │   │       ├── data_utils.py                               # Save functionality for collectors
+│   │       ├── database_utils.py
+│   │       ├── decorators.py
+│   │       ├── dynamic_schema_utils.py
 │   │       ├── evaluation.py
 │   │       └── wikipedia_utils.py
 │   ├── data_collection/                                    # Data collection modules
 │   │   ├── __init__.py
-│   │   ├── debug.py                                        # Debug script (checks if collection config returns success or fail)
-│   │   ├── wikipedia_collector.py                          # Political data collections from Wikipedia API
-│   │   ├── social_collector.py                             # Social media data collection
-│   │   └── market_collector.py                             # Financial data collection
+│   │   ├── checker.py/                                     # Checks if collection targets are valid or not
+│   │   ├── collector.py                                    # All collectors orchestrator and CLI
+│   │   │   ├── __init__.py
+│   │   │   ├── base_collector.py                           # Abstract base collector
+│   │   │   └── wikipedia_collector.py                      # Wikipedia collector - inherits base_collector
+│   │   └── savers/
+│   │       ├── __init__.py
+│   │       ├── base_saver.py                               # Abstract base saver
+│   │       └── wikipedia_saver.py                          # Wikipedia saver - inherits base_saver
 │   ├── data_processing/                                    # Data processing modules
 │   │   ├── __init__.py
 │   │   ├── cleaner.py                                      # All cleaners orchestrator and CLI
@@ -113,27 +131,15 @@ EpochAI/
 │   │       └── wikipedia_cleaner.py                        # Wikipedia cleaner - inherits base_cleaner
 │   ├── politicsai/                                         # PoliticsAI component
 │   │   ├── __init__.py
-│   │   ├── personality_profiler.py
-│   │   ├── relationship_analyzer.py
-│   │   ├── opinion_analyzer.py
-│   │   ├── historical_analyzer.py
-│   │   └── prediction_engine.py
 │   ├── stocksai/                                           # StocksAI component
 │   │   ├── __init__.py
-│   │   ├── event_analyzer.py
-│   │   ├── innovation_analyzer.py
-│   │   ├── sector_analyzer.py
-│   │   ├── historical_analyzer.py
-│   │   └── prediction_engine.py
 │   └── visualization/                                      # Data visualization
 │       ├── __init__.py
-│       ├── plot_utils.py
-│       └── dashboard.py
 │
 └── tests/                                                  # Unit and integration tests
     ├── conftest.py                                         # Tells Pytest where project filepath is
-    ├── test_politicsai.py
-    │   ├── .gitkeep
+    ├── integration_tests
+    │   ├── currently_empty
     └── unit_tests.py
         ├── test_base_cleaner.py
         ├── test_config_loader.py
