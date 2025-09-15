@@ -19,7 +19,7 @@ class CollectionTargetsDAO:
         collection_type_id: int,
         language_code: str,
         collection_name: str,
-        is_collected: bool = False,
+        collection_status_id: int,
     ) -> Optional[int]:
         """
         Creates a new collection target entry
@@ -30,10 +30,10 @@ class CollectionTargetsDAO:
 
         query = """
             INSERT INTO collection_targets
-            (collector_name_id, collection_type_id, language_code, collection_name, is_collected, updated_at, created_at)
+            (collector_name_id, collection_type_id, language_code, collection_name, collection_status_id, updated_at, created_at)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
             RETURNING id
-        """  # noqa
+        """
 
         try:
             current_timestamp = datetime.now()
@@ -42,7 +42,7 @@ class CollectionTargetsDAO:
                 collection_type_id,
                 language_code,
                 collection_name,
-                is_collected,
+                collection_status_id,
                 current_timestamp,
                 current_timestamp,
             )
@@ -64,28 +64,28 @@ class CollectionTargetsDAO:
 
     def get_by_id(
         self,
-        target_id: int,
-    ) -> Optional[CollectionTargets]:
-        """Gets collection target by id"""
-
+        id_list: List[int],
+    ) -> Optional[List[CollectionTargets]]:
+        """Gets collection target objects by their IDs"""
         query = """
-            SELECT * FROM collection_targets WHERE id = %s
+            SELECT * FROM collection_targets WHERE id = ANY(%s)
         """
-
-        try:
-            results = self.db.execute_select_query(query, (target_id,))
-            if results:
-                return CollectionTargets.from_dict(results[0])
+        if not id_list:
+            self.logger.error(f"Passing in empty or None list: {id_list}")
             return None
 
+        try:
+            results = self.db.execute_select_query(query, (id_list,))
+            return [CollectionTargets.from_dict(row) for row in results] if results else None
+
         except Exception as general_error:
-            self.logger.error(f"Error getting collection target by id {target_id}: {general_error}")
+            self.logger.error(f"Error getting collection target by id {id_list}: {general_error}")
             return None
 
     def get_all(self) -> List[CollectionTargets]:
         """Gets all collection targets"""
         query = """
-            Select * FROM collection_targets ORDER BY created_at DESC
+            SELECT * FROM collection_targets ORDER BY created_at DESC
         """
 
         try:
@@ -103,95 +103,164 @@ class CollectionTargetsDAO:
             self.logger.error(f"Error getting all collection targets: {general_error}")
             return []
 
-    def get_by_collection_status(
+    def get_by_collection_status_id(
         self,
-        is_collected: bool,
+        collection_status_id: int,
     ) -> List[CollectionTargets]:
-        """Gets targets by collection status"""
+        """Gets targets by collection status ID"""
 
         query = """
-            SELECT * FROM collection_targets WHERE is_collected = %s ORDER BY created_at ASC
+            SELECT * FROM collection_targets WHERE collection_status_id = %s ORDER BY created_at ASC
         """
 
         try:
-            results = self.db.execute_select_query(query, (is_collected,))
+            results = self.db.execute_select_query(query, (collection_status_id,))
             return [CollectionTargets.from_dict(row) for row in results]
 
         except Exception as general_error:
-            self.logger.error(f"Error getting targets by collection status '{is_collected}': {general_error}")
+            self.logger.error(
+                f"Error getting targets by collection status ID '{collection_status_id}': {general_error}",
+            )
             return []
 
-    def get_uncollected_by_type_and_language(
+    def get_by_type_and_language(
         self,
-        collection_types: str,
+        collection_type_id: int,
         language_code: str,
+        collection_status_id: Optional[int] = None,
     ) -> List[CollectionTargets]:
         """
-        Gets uncollected targets by their collection type and language
-
-        Note:
-            I'm sorry to whoever sees this in the future for making the function name so long
+        Gets targets by collection type and language, optionally filtered by status
         """
-
-        query = """
-            SELECT cc.*
-            FROM collection_targets cc
-            JOIN collection_types ct ON cc.collection_type_id = ct.id
-            WHERE ct.collection_type = %s
-            AND cc.language_code = %s
-            AND cc.is_collected = FALSE
-            ORDER BY cc.created_at ASC
-        """
+        params: Any
+        if collection_status_id is not None:
+            query = """
+                SELECT * FROM collection_targets
+                WHERE collection_type_id = %s
+                AND language_code = %s
+                AND collection_status_id = %s
+                ORDER BY created_at ASC
+            """
+            params = (collection_type_id, language_code, collection_status_id)
+        else:
+            query = """
+                SELECT * FROM collection_targets
+                WHERE collection_type_id = %s
+                AND language_code = %s
+                ORDER BY created_at ASC
+            """
+            params = (collection_type_id, language_code)
 
         try:
-            results = self.db.execute_select_query(query, (collection_types, language_code))
+            results = self.db.execute_select_query(query, params)
+            return [CollectionTargets.from_dict(row) for row in results]
+
+        except Exception as general_error:
+            self.logger.error(
+                f"Error getting targets for type ID {collection_type_id} and language '{language_code}': {general_error}",
+            )
+            return []
+
+    def get_by_collector_name_id(
+        self,
+        collector_name_id: int,
+        collection_status_id: Optional[int] = None,
+        unique_languages_only: bool = False,
+    ) -> List[CollectionTargets]:
+        """Gets targets by collector name ID, optionally filtered by status"""
+        params: Any
+        if unique_languages_only:
+            if collection_status_id is not None:
+                query = """
+                    SELECT DISTINCT ON (language_code) *
+                    FROM collection_targets
+                    WHERE collector_name_id = %s
+                    AND collection_status_id = %s
+                    ORDER BY language_code, created_at ASC
+                """
+                params = (collector_name_id, collection_status_id)
+            else:
+                query = """
+                    SELECT DISTINCT ON (language_code) *
+                    FROM collection_targets
+                    WHERE collector_name_id = %s
+                    ORDER BY language_code, created_at ASC
+                """
+                params = (collector_name_id,)
+        else:
+            if collection_status_id is not None:
+                query = """
+                    SELECT * FROM collection_targets
+                    WHERE collector_name_id = %s
+                    AND collection_status_id = %s
+                    ORDER BY language_code, created_at ASC
+                """
+                params = (collector_name_id, collection_status_id)
+            else:
+                query = """
+                    SELECT * FROM collection_targets
+                    WHERE collector_name_id = %s
+                    ORDER BY language_code, created_at ASC
+                """
+                params = (collector_name_id,)
+
+        try:
+            results = self.db.execute_select_query(query, params)
+            return [CollectionTargets.from_dict(row) for row in results]
+
+        except Exception as general_error:
+            self.logger.error(
+                f"Error getting targets for collector name ID {collector_name_id}: {general_error}",
+            )
+            return []
+
+    def get_by_collection_type_id(
+        self,
+        collection_type_id: int,
+        collection_status_id: Optional[int] = None,
+    ) -> List[CollectionTargets]:
+        """Gets targets by collection type ID, optionally filtered by status"""
+        params: Any
+        if collection_status_id is not None:
+            query = """
+                SELECT * FROM collection_targets
+                WHERE collection_type_id = %s
+                AND collection_status_id = %s
+                ORDER BY language_code, created_at ASC
+            """
+            params = (collection_type_id, collection_status_id)
+        else:
+            query = """
+                SELECT * FROM collection_targets
+                WHERE collection_type_id = %s
+                ORDER BY language_code, created_at ASC
+            """
+            params = (collection_type_id,)
+
+        try:
+            results = self.db.execute_select_query(query, params)
             targets = [CollectionTargets.from_dict(row) for row in results]
 
-            """self.logger.info(f"Found {len(targets)} uncollected in type '{collection_types}' for language code '{language_code}'")"""  # noqa
+            self.logger.info(
+                f"Found {len(targets)} targets for collection type ID {collection_type_id}",
+            )
             return targets
 
         except Exception as general_error:
             self.logger.error(
-                f"Error getting uncollected {collection_types} in type '{collection_types}' targets for language code '{language_code}': {general_error}",  # noqa
+                f"Error getting targets for collection type ID {collection_type_id}: {general_error}",
             )
             return []
 
-    def get_uncollected_by_type(
+    def get_grouped_by_language(
         self,
-        collection_type: str,
-    ) -> List[CollectionTargets]:
-        """Gets all uncollected targets by type across all languages"""
-
-        query = """
-            SELECT cc.*
-            FROM collection_targets cc
-            JOIN collection_types ct ON cc.collection_type_id = ct.id
-            WHERE ct.collection_type = %s
-            AND cc.is_collected = false
-            ORDER BY cc.language_code, cc.created_at ASC
-        """
-
-        try:
-            results = self.db.execute_select_query(query, (collection_type,))
-            targets = [CollectionTargets.from_dict(row) for row in results]
-
-            self.logger.info(
-                f"Found {len(targets)} uncollected {collection_type} targets across all languages",
-            )
-            return targets
-
-        except Exception as general_error:
-            self.logger.error(f"Error getting uncollected {collection_type} targets: {general_error}")
-            return []
-
-    def get_uncollected_grouped_by_language(
-        self,
-        collection_type: str,
+        collection_type_id: int,
+        collection_status_id: Optional[int] = None,
     ) -> Dict[str, List[CollectionTargets]]:
         """
-        Gets all uncolected targets grouped by language for easier processing
+        Gets targets grouped by language for easier processing
         """
-        targets = self.get_uncollected_by_type(collection_type)
+        targets = self.get_by_collection_type_id(collection_type_id, collection_status_id)
         grouped: Dict[str, List[CollectionTargets]] = {}
 
         for config in targets:
@@ -201,59 +270,41 @@ class CollectionTargetsDAO:
 
         return grouped
 
-    def mark_as_collected(
+    def update_collection_status_id(
         self,
         target_id: int,
+        collection_status_id: int,
     ) -> bool:
-        """Marks a row as collected"""
+        """Updates the collection status of a target by status ID"""
 
         query = """
             UPDATE collection_targets
-            SET is_collected = true, updated_at = %s
+            SET collection_status_id = %s,
+            updated_at = %s
             WHERE id = %s
         """
 
         try:
-            affected_rows = self.db.execute_update_delete_query(query, (datetime.now(), target_id))
+            affected_rows = self.db.execute_update_delete_query(
+                query,
+                (collection_status_id, datetime.now(), target_id),
+            )
 
             if affected_rows > 0:
-                self.logger.info(f"Marked target {target_id} as collected")
+                self.logger.info(f"Updated target {target_id} status to ID {collection_status_id}")
                 return True
-            self.logger.warning(f"No target found with id '{target_id}' to mark as collected")
+            self.logger.warning(f"No target found with id '{target_id}' to update status")
             return False
 
         except Exception as general_error:
-            self.logger.error(f"Error marking target with id '{target_id} as collected: {general_error}'")
-            return False
-
-    def mark_as_uncollected(
-        self,
-        target_id: int,
-    ) -> bool:
-        """Marks a row as uncollected"""
-
-        query = """
-            UPDATE collection_targets
-            SET is_collected = false, updated_at = %s
-            WHERE id = %s
-        """
-
-        try:
-            affected_rows = self.db.execute_update_delete_query(query, (datetime.now(), target_id))
-
-            if affected_rows > 0:
-                self.logger.info(f"Marked target {target_id} as uncollected")
-                return True
-            self.logger.warning(f"No target found with id '{target_id}' to mark as uncollected")
-            return False
-
-        except Exception as general_error:
-            self.logger.error(f"Error marking target with id '{target_id} as uncollected: {general_error}'")
+            self.logger.error(
+                f"Error updating target {target_id} status to ID {collection_status_id}: {general_error}",
+            )
             return False
 
     def bulk_create_collection_targets(
         self,
-        collection_targets: List[Tuple[int, int, str, str, bool]],
+        collection_targets: List[Tuple[int, int, str, str, int]],
     ) -> int:
         """
         Bulk creates multiple targets
@@ -267,9 +318,9 @@ class CollectionTargetsDAO:
 
         query = """
             INSERT INTO collection_targets
-            (collector_name_id, collection_type_id, language_code, collection_name, is_collected, updated_at, created_at)
+            (collector_name_id, collection_type_id, language_code, collection_name, collection_status_id, updated_at, created_at)
             VALUES (%s, %s, %s, %s, %s, %s, %s)
-        """  # noqa
+        """
 
         try:
             operations = []
@@ -281,14 +332,14 @@ class CollectionTargetsDAO:
                     collection_type_id,
                     language_code,
                     collection_name,
-                    is_collected,
+                    collection_status_id,
                 ) = config_data
                 params = (
                     collector_name_id,
                     collection_type_id,
                     language_code,
                     collection_name,
-                    is_collected,
+                    collection_status_id,
                     now,
                     now,
                 )
@@ -306,49 +357,7 @@ class CollectionTargetsDAO:
             self.logger.error(f"Error bulk creating target: {general_error}")
             return 0
 
-    def get_collection_status(self) -> Dict[str, Any]:
-        """Gets statistics about collection status"""
-        query = """
-            SELECT
-                ct.collection_type,
-                cc.language_code,
-                COUNT(*) as total_targets,
-                SUM(CASE WHEN cc.is_collected THEN 1 ELSE 0 END) as collected_count,
-                SUM(CASE WHEN NOT cc.is_collected THEN 1 ELSE 0 END) as uncollected_count
-            FROM collection_targets cc
-            JOIN collection_types ct ON cc.collection_type_id = ct.id
-            GROUP BY ct.collection_type, cc.language_code
-            ORDER BY ct.collection_type, cc.language_code
-        """
-
-        try:
-            results = self.db.execute_select_query(query)
-
-            total_targets = sum(row["total_targets"] for row in results)
-            total_collected = sum(row["collected_count"] for row in results)
-            total_uncollected = sum(row["uncollected_count"] for row in results)
-
-            summary = {
-                "total_targets": total_targets,
-                "total_collected": total_collected,
-                "total_uncollected": total_uncollected,
-                "collection_percentage": round((total_collected / total_targets * 100), 2)
-                if total_targets > 0
-                else 0,
-            }
-
-            stats = {
-                "by_type_and_language": results,
-                "summary": summary,
-            }
-
-            return stats
-
-        except Exception as general_error:
-            self.logger.error(f"Error getting collection stats: {general_error}")
-            return {"by_type_and_language": [], "summary": {}}
-
-    def delete_config(
+    def delete_target(
         self,
         target_id: int,
     ) -> bool:
@@ -390,28 +399,25 @@ class CollectionTargetsDAO:
             self.logger.error(f"Error searching targets by name '{search_term}': {general_error}")
             return []
 
-    def get_by_collector_and_type(
+    def get_by_collector_and_type_ids(
         self,
-        collector_name: str,
-        collection_type: str,
+        collector_name_id: int,
+        collection_type_id: int,
     ) -> List[CollectionTargets]:
-        """Gets targets by collector name and collection type"""
+        """Gets targets by collector name ID and collection type ID"""
 
         query = """
-            SELECT cc.*
-            FROM collection_targets cc
-            JOIN collector_names cn ON cc.collector_name_id = cn.id
-            JOIN collection_types ct ON cc.collection_type_id = ct.id
-            WHERE cn.collector_name = %s AND ct.collection_type = %s
-            ORDER BY cc.language_code, cc.collection_name
+            SELECT * FROM collection_targets
+            WHERE collector_name_id = %s AND collection_type_id = %s
+            ORDER BY language_code, collection_name
         """
 
         try:
-            results = self.db.execute_select_query(query, (collector_name, collection_type))
+            results = self.db.execute_select_query(query, (collector_name_id, collection_type_id))
             return [CollectionTargets.from_dict(row) for row in results]
 
         except Exception as general_error:
             self.logger.error(
-                f"Error getting targets for collector '{collector_name}' and type '{collection_type}': {general_error}",  # noqa
+                f"Error getting targets for collector ID {collector_name_id} and type ID {collection_type_id}: {general_error}",
             )
             return []

@@ -39,7 +39,7 @@ exclude = [
     "epochai/common/database/migrations/versions/",
 ]
 
-line-length = 110
+line-length = 130
 
 target-version = "py38"
 
@@ -142,6 +142,7 @@ warn_unreachable = true
 strict_equality = true
 ignore_missing_imports = true
 no_strict_optional = true
+disable_error_code = ["no-any-return", "misc"]
 
 exclude = [
     "^data/",

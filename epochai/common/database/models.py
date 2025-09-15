@@ -51,6 +51,29 @@ class CollectionTypes:
 
 
 @dataclass
+class CollectionStatuses:
+    """collection_statuses table model"""
+
+    id: Optional[int] = None
+    collection_status_name: str = ""
+    updated_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+
+    @classmethod
+    def from_dict(
+        cls,
+        data: Dict[str, Any],
+    ) -> "CollectionStatuses":
+        """Creates instance from database row dictionary"""
+        return cls(
+            id=data.get("id"),
+            collection_status_name=data.get("collection_status_name"),
+            updated_at=data.get("updated_at"),
+            created_at=data.get("created_at"),
+        )
+
+
+@dataclass
 class CollectionTargets:
     """collection_targets table model"""
 
@@ -59,7 +82,7 @@ class CollectionTargets:
     collection_type_id: int = 0
     language_code: str = ""
     collection_name: str = ""
-    is_collected: bool = False
+    collection_status_id: int = 0
     updated_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
 
@@ -75,7 +98,7 @@ class CollectionTargets:
             collection_type_id=data.get("collection_type_id"),
             language_code=data.get("language_code"),
             collection_name=data.get("collection_name"),
-            is_collected=data.get("is_collected"),
+            collection_status_id=data.get("collection_status_id"),
             updated_at=data.get("updated_at"),
             created_at=data.get("created_at"),
         )
@@ -468,7 +491,7 @@ class LinkAttemptsToRuns:
 
 
 @dataclass
-class DebugWikipediaResults:
+class CheckCollectionTargets:
     """debug_wikipedia_results table model"""
 
     id: Optional[int] = None
@@ -489,7 +512,7 @@ class DebugWikipediaResults:
     def from_dict(
         cls,
         data: Dict[str, Any],
-    ) -> "DebugWikipediaResults":
+    ) -> "CheckCollectionTargets":
         """Creates instance from database row dict"""
         search_results_found = data.get("search_results_found")
         if isinstance(search_results_found, str):

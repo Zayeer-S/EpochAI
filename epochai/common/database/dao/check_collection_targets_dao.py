@@ -3,11 +3,11 @@ import json
 from typing import Any, Dict, List, Optional
 
 from epochai.common.database.database import get_database
-from epochai.common.database.models import DebugWikipediaResults
+from epochai.common.database.models import CheckCollectionTargets
 from epochai.common.logging_config import get_logger
 
 
-class DebugWikipediaResultsDAO:
+class CheckCollectionTargetsDAO:
     def __init__(self):
         self.db = get_database()
         self.logger = get_logger(__name__)
@@ -25,7 +25,7 @@ class DebugWikipediaResultsDAO:
         """Creates a new debug test result"""
 
         query = """
-            INSERT INTO debug_wikipedia_results
+            INSERT INTO check_collection_targets
             (collection_target_id, search_term_used, language_code, test_status,
              search_results_found, error_message, test_duration, created_at)
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
@@ -64,16 +64,16 @@ class DebugWikipediaResultsDAO:
     def get_by_test_status(
         self,
         test_status: str,
-    ) -> List[DebugWikipediaResults]:
+    ) -> List[CheckCollectionTargets]:
         """Gets debug results by test status"""
 
         query = """
-            SELECT * FROM debug_wikipedia_results WHERE test_status = %s ORDER BY created_at DESC
+            SELECT * FROM check_collection_targets WHERE test_status = %s ORDER BY created_at DESC
         """
 
         try:
             results = self.db.execute_select_query(query, (test_status,))
-            debug_results = [DebugWikipediaResults.from_dict(row) for row in results]
+            debug_results = [CheckCollectionTargets.from_dict(row) for row in results]
 
             self.logger.info(f"Found {len(debug_results)} debug results with status '{test_status}'")
             return debug_results
@@ -82,27 +82,27 @@ class DebugWikipediaResultsDAO:
             self.logger.error(f"Error getting debug results by status '{test_status}': {general_error}")
             return []
 
-    def get_failed_tests(self) -> List[DebugWikipediaResults]:
+    def get_failed_tests(self) -> List[CheckCollectionTargets]:
         """Gets all failed debug tests"""
         return self.get_by_test_status("failed")
 
-    def get_successful_tests(self) -> List[DebugWikipediaResults]:
+    def get_successful_tests(self) -> List[CheckCollectionTargets]:
         """Gets all successful debug tests"""
         return self.get_by_test_status("success")
 
     def get_by_target_id(
         self,
         collection_target_id: int,
-    ) -> List[DebugWikipediaResults]:
+    ) -> List[CheckCollectionTargets]:
         """Gets all debug results for a specific target"""
 
         query = """
-            SELECT * FROM debug_wikipedia_results WHERE collection_target_id = %s ORDER BY created_at DESC
+            SELECT * FROM check_collection_targets WHERE collection_target_id = %s ORDER BY created_at DESC
         """
 
         try:
             results = self.db.execute_select_query(query, (collection_target_id,))
-            return [DebugWikipediaResults.from_dict(row) for row in results]
+            return [CheckCollectionTargets.from_dict(row) for row in results]
 
         except Exception as general_error:
             self.logger.error(
@@ -120,7 +120,7 @@ class DebugWikipediaResultsDAO:
                 AVG(test_duration) as avg_duration,
                 MIN(test_duration) as min_duration,
                 MAX(test_duration) as max_duration
-            FROM debug_wikipedia_results
+            FROM check_collection_targets
             GROUP BY test_status
             ORDER BY test_count DESC
         """
@@ -131,7 +131,7 @@ class DebugWikipediaResultsDAO:
                 COUNT(*) as test_count,
                 COUNT(CASE WHEN test_status = 'success' THEN 1 END) as success_count,
                 COUNT(CASE WHEN test_status = 'failed' THEN 1 END) as failed_count
-            FROM debug_wikipedia_results
+            FROM check_collection_targets
             GROUP BY language_code
             ORDER BY test_count DESC
         """
@@ -170,11 +170,11 @@ class DebugWikipediaResultsDAO:
     def get_recent_tests(
         self,
         hours: int = 24,
-    ) -> List[DebugWikipediaResults]:
+    ) -> List[CheckCollectionTargets]:
         """Gets debug tests from the last X hours"""
 
         query = """
-            SELECT * FROM debug_wikipedia_results
+            SELECT * FROM check_collection_targets
             WHERE created_at >= %s
             ORDER BY created_at DESC
         """
@@ -182,7 +182,7 @@ class DebugWikipediaResultsDAO:
         try:
             cutoff_time = datetime.now() - timedelta(hours=hours)
             results = self.db.execute_select_query(query, (cutoff_time,))
-            return [DebugWikipediaResults.from_dict(row) for row in results]
+            return [CheckCollectionTargets.from_dict(row) for row in results]
 
         except Exception as general_error:
             self.logger.error(f"Error getting recent debug tests from last {hours} hours: {general_error}")
