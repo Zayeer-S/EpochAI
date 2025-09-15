@@ -550,11 +550,10 @@ def main():
                         status_groups[status][col_type][lang] = count
 
                     status_display_names = {
-                        "not_collected": "Uncollected targets",
-                        "failed": "Failed collection",
-                        "check_failed": "Failed check",
-                        "collected": "Successfully collected",
-                        "skipped": "Skipped",
+                        CollectionStatusNames.NOT_COLLECTED.value: "Uncollected targets",
+                        CollectionStatusNames.FAILED.value: "Failed collection",
+                        CollectionStatusNames.CHECK_FAILED.value: "Failed check",
+                        CollectionStatusNames.COLLECTED.value: "Successfully collected",
                     }
 
                     for status, display_name in status_display_names.items():
@@ -577,7 +576,7 @@ def main():
                                 total = sum(languages.values())
                                 print(f"\t\ttotal: {total}")
                                 print()
-                        elif status == "not_collected":
+                        elif status == CollectionStatusNames.NOT_COLLECTED.value:
                             print(f"\t{display_name}:")
                             print("\t\tNone")
                             print()
