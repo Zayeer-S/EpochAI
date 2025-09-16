@@ -10,7 +10,7 @@ class WikipediaCollector(BaseCollector):
     def __init__(
         self,
     ):
-        self.yaml_config = ConfigLoader.get_wikipedia_yaml_config()
+        self.yaml_config = ConfigLoader.get_collector_yaml_config("wikipedia")
 
         self._collector_name = self.yaml_config.get("collector_name")
         self._collector_version = self.yaml_config.get("current_schema_version")
