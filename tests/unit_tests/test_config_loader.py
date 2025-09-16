@@ -1,4 +1,4 @@
-# ruff: noqa: SIM117
+# ruff: noqa: SIM117, SLF001
 
 from unittest.mock import Mock, mock_open, patch
 
@@ -107,7 +107,7 @@ class TestConfigLoaderPathGeneration:
         mock_abspath.return_value = "/project/root"
         mock_join.side_effect = lambda *args: "/".join(args)
 
-        result = ConfigLoader._get_config_path("config.yml")  # noqa
+        result = ConfigLoader._get_config_path("config.yml")
         mock_dirname.assert_called_once()
         mock_abspath.assert_called_once_with("/current/dir/../../..")
         mock_join.assert_called_with("/project/root", "config.yml")
@@ -123,7 +123,7 @@ class TestConfigLoaderLoadConfig:
 
         yaml_content = yaml.dump(sample_config)
         with patch("builtins.open", mock_open(read_data=yaml_content)):
-            result = ConfigLoader.load_the_config()
+            result = ConfigLoader._load_the_config()
 
         assert result == sample_config
         mock_validate.assert_called_once_with(sample_config)
@@ -134,7 +134,7 @@ class TestConfigLoaderLoadConfig:
 
         with patch("builtins.open", side_effect=FileNotFoundError("File not found")):
             with pytest.raises(FileNotFoundError, match="Config file not found at location"):
-                ConfigLoader.load_the_config()
+                ConfigLoader._load_the_config()
 
     @patch("epochai.common.config.config_loader.ConfigLoader._get_config_path")
     def test_load_config_yaml_error(self, mock_get_path):
@@ -142,7 +142,7 @@ class TestConfigLoaderLoadConfig:
 
         with patch("builtins.open", mock_open(read_data="invalid: yaml: content: [")):
             with pytest.raises(ValueError, match="Error in parsing config.yml"):
-                ConfigLoader.load_the_config()
+                ConfigLoader._load_the_config()
 
     @patch("epochai.common.config.config_loader.ConfigLoader._get_config_path")
     def test_load_config_unicode_error(self, mock_get_path):
@@ -150,7 +150,7 @@ class TestConfigLoaderLoadConfig:
 
         with patch("builtins.open", side_effect=UnicodeDecodeError("utf-8", b"", 0, 1, "error")):
             with pytest.raises(ValueError, match="UTF-8 encoding error"):
-                ConfigLoader.load_the_config()
+                ConfigLoader._load_the_config()
 
     @patch("epochai.common.config.config_loader.ConfigLoader._get_config_path")
     def test_load_config_none_result(self, mock_get_path):
@@ -158,7 +158,7 @@ class TestConfigLoaderLoadConfig:
 
         with patch("builtins.open", mock_open(read_data="")):
             with pytest.raises(ValueError, match="Config file returning as None"):
-                ConfigLoader.load_the_config()
+                ConfigLoader._load_the_config()
 
 
 class TestConfigLoaderLoadConstraints:
@@ -199,7 +199,7 @@ class TestConfigLoaderLoadConstraints:
 
 class TestConfigMerging:
     def test_get_merged_config_success(self, sample_config):
-        result = ConfigLoader.get_merged_config(sample_config, "wikipedia")
+        result = ConfigLoader._get_merged_config(sample_config, "wikipedia")
 
         # It should merge defaults with specific wikipedia config
         expected = {
@@ -222,7 +222,7 @@ class TestConfigMerging:
         del config_without_defaults["defaults"]
 
         with pytest.raises(ValueError, match="No 'defaults' section found in config"):
-            ConfigLoader.get_merged_config(config_without_defaults, "wikipedia")
+            ConfigLoader._get_merged_config(config_without_defaults, "wikipedia")
 
     def test_get_merged_config_no_main_section(self, sample_config):
         # Remove wikipedia section
@@ -230,7 +230,7 @@ class TestConfigMerging:
         del config_without_main["wikipedia"]
 
         with pytest.raises(ValueError, match="No 'wikipedia' section found in config"):
-            ConfigLoader.get_merged_config(config_without_main, "wikipedia")
+            ConfigLoader._get_merged_config(config_without_main, "wikipedia")
 
     def test_override_default_config_values_nested(self):
         defaults = {
@@ -254,7 +254,7 @@ class TestConfigMerging:
             },
         }
 
-        result = ConfigLoader.override_default_config_values(defaults, overrides)
+        result = ConfigLoader._override_default_config_values(defaults, overrides)
 
         expected = {
             "api": {
@@ -272,7 +272,7 @@ class TestConfigMerging:
 
     def test_override_default_config_values_non_dict(self):
         # Test edge case where one of the values is not a dict
-        result = ConfigLoader.override_default_config_values("default", "override")
+        result = ConfigLoader._override_default_config_values("default", "override")
         assert result == "override"
 
 
@@ -283,7 +283,7 @@ class TestConfigLoaderValidation:
         mock_merge.return_value = {"merged": "config"}
         mock_validate.return_value = Mock()
 
-        result = ConfigLoader.validate_whole_config(sample_config)
+        result = ConfigLoader._validate_whole_config(sample_config)
 
         # Should call get_merged_config for wikipedia
         mock_merge.assert_called_once_with(sample_config, "wikipedia")
@@ -322,7 +322,7 @@ class TestConfigLoaderGetters:
         mock_load.return_value = sample_config
         mock_merge.return_value = {"merged": "wikipedia_config"}
 
-        result = ConfigLoader.get_wikipedia_yaml_config()
+        result = ConfigLoader.get_collector_yaml_config("wikipedia")
 
         mock_merge.assert_called_once_with(sample_config, "wikipedia")
         assert result == {"merged": "wikipedia_config"}
