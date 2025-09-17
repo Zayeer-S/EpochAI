@@ -5,7 +5,7 @@ class CollectionStatusNames(Enum):
     NOT_COLLECTED = "not_collected"
     COLLECTED = "collected"
     FAILED = "failed"
-    CHECK_FAILED = "debug_failed"
+    CHECK_FAILED = "check_failed"
 
 
 class AttemptStatusNames(Enum):
