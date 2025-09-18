@@ -203,9 +203,11 @@ class BaseSaver(ABC):
             collection_status_name=new_status_name,
         )
 
-        if update_mark:
+        if update_mark and new_status_name == CollectionStatusNames.COLLECTED.value:
             self._logger.info(f"Marked target {collection_target_id} as {new_status_name}")
-        else:
+        elif update_mark and new_status_name == CollectionStatusNames.FAILED.value:
             self._logger.error(f"Failed to mark {collection_target_id} as {new_status_name}")
+        else:
+            self._logger.error(f"Failed to mark target {collection_target_id} as {new_status_name}")
 
         return success_count if success_count else 0
