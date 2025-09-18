@@ -65,11 +65,14 @@ class ConfigLoader:
             The config (dict) originally sent to this
         """
         merged_wikipedia_config = ConfigLoader._get_merged_config(config, "wikipedia")
+        merged_fivethirtyeight_config = ConfigLoader._get_merged_config(config, "fivethirtyeight")
 
         config_parts_to_validate = {
             "data_settings": config.get("data_settings"),
             "logging": config.get("logging"),
             "wikipedia": merged_wikipedia_config,
+            "fivethirtyeight": merged_fivethirtyeight_config,
+            "defaults": config.get("defaults"),
         }
 
         ValidateWholeConfig.validate_config(config_parts_to_validate)

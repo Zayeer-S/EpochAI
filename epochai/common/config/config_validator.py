@@ -85,13 +85,14 @@ class DataValidatorConfig(BaseModel):
         return self
 
 
-class WikipediaCleanerConfig(BaseModel):
+class CleanerBaseConfig(BaseModel):
     cleaner_name: str
     current_schema_version: str
 
 
 class CleanersConfig(BaseModel):
-    wikipedia: WikipediaCleanerConfig
+    wikipedia: CleanerBaseConfig
+    fivethirtyeight: CleanerBaseConfig
 
 
 class WikipediaDefaultApiConfig(BaseModel):
@@ -148,14 +149,26 @@ class WikipediaDefaultApiConfig(BaseModel):
         return self
 
 
+class FiveThirtyEightApiConfig(BaseModel):
+    language: str
+    rate_limit_delay: float
+
+
 class WikipediaDefaultConfig(BaseModel):
     collector_name: str
     current_schema_version: str
     api: WikipediaDefaultApiConfig
 
 
+class FiveThirtyEightDefaultConfig(BaseModel):
+    collector_name: str
+    current_schema_version: str
+    api: FiveThirtyEightApiConfig
+
+
 class DefaultsConfig(BaseModel):
     wikipedia: WikipediaDefaultConfig
+    fivethirtyeight: FiveThirtyEightDefaultConfig
 
 
 class DataSettings(BaseModel):
@@ -240,10 +253,15 @@ class WikipediaConfig(BaseModel):
     api: WikipediaApiConfig
 
 
+class FiveThirtyEightConfig(BaseModel):
+    api: FiveThirtyEightApiConfig
+
+
 class ValidateWholeConfig(BaseModel):
     data_settings: DataSettings
     logging: LoggingConfig
     wikipedia: WikipediaConfig
+    fivethirtyeight: FiveThirtyEightConfig
     defaults: DefaultsConfig
 
     @classmethod
@@ -257,4 +275,4 @@ class ValidateWholeConfig(BaseModel):
         try:
             return cls(**config)
         except Exception as general_error:
-            raise ValueError(f"Error validating config: {general_error}") from None
+            raise ValueError(f"Error validating config: {general_error}") from general_error
