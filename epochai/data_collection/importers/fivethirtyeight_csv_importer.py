@@ -64,14 +64,8 @@ class FiveThirtyEightCSVImporter:
         cycle = row.get("cycle", "unknown")
         state = row.get("state", "unknown").replace(" ", "_")
         candidate_name = row.get("candidate_name", "unknown").replace(" ", "_")
-        modeldate = row.get("modeldate", "unknown")
 
-        if isinstance(modeldate, str) and "T" in modeldate:
-            modeldate = modeldate.split("T")[0]
-        elif pd.isna(modeldate):
-            modeldate = "unknown"
-
-        return f"{cycle}_{state}_{candidate_name}_{modeldate}_{row_index}"
+        return f"{cycle}_{state}_{candidate_name}_{row_index}"
 
     @handle_generic_errors_gracefully("while inserting batch", 0)
     def _insert_batch(
