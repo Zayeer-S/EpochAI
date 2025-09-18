@@ -85,7 +85,7 @@ class CollectorCLI:
         """Gets a list of collection types that have uncollected data in the passed-in collector_name"""
         try:
             result: List[str] = self.reporter.get_collection_type_list(
-                collector_name=collector_name,
+                collector_name=f"{collector_name}_collector",
                 unique_types_only=True,
                 collection_status_name=CollectionStatusNames.NOT_COLLECTED.value,
             )
@@ -101,7 +101,7 @@ class CollectorCLI:
         """Gets a list of language codes that have uncollected data in the passed-in collector_name"""
         try:
             result: List[str] = self.reporter.get_language_code_list(
-                collector_name=collector_name,
+                collector_name=f"{collector_name}_collector",
                 unique_types_only=True,
                 collection_status=CollectionStatusNames.NOT_COLLECTED.value,
             )
@@ -192,7 +192,7 @@ class CollectorCLI:
             available_languages = {}
 
             for type in all_available_types:
-                each_language = self._get_available_language_codes(type)
+                each_language = self._get_available_language_codes(collector_name)
                 available_languages[type] = each_language
 
             type_details = {}
