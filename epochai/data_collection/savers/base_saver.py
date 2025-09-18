@@ -186,7 +186,7 @@ class BaseSaver(ABC):
         """
         if not self._save_to_database:
             self._logger.warning("Database saving is disabled in config.yml")
-            return None
+            return 0
 
         self._logger.info(f"Saving {len(collected_data)} items to database for target {collection_target_id}...")
 
@@ -208,4 +208,4 @@ class BaseSaver(ABC):
         else:
             self._logger.error(f"Failed to mark {collection_target_id} as {new_status_name}")
 
-        return success_count if success_count else None
+        return success_count if success_count else 0
