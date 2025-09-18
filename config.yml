@@ -4,11 +4,6 @@ logging:
   log_to_file: True
   log_directory: "logs"
 
-# Schema Setup
-metadata_schema:
-  schema_cache_limit: 3
-  schema_check_interval: 5
-
 # Data Setup
 data_settings:
   data_output:
