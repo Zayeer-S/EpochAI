@@ -34,13 +34,15 @@ data_settings:
     wikipedia:
       cleaner_name: "wikipedia_cleaner"
       current_schema_version: "1.0.0"
+    fivethirtyeight:
+      cleaner_name: "fivethirtyeight_cleaner"
+      current_schema_version: "1.0.0"
 
 # Default setup for collectors
 defaults:
   wikipedia:
     collector_name: "wikipedia_collector"
     current_schema_version: "1.0.0"
-
     api:
       language: ["en"]
       rate_limit_delay: 2.0
@@ -49,11 +51,25 @@ defaults:
       request_timeout: 30
       recursive_limit: 1
 
-# Fine tune Wikipedia API config settings
+  fivethirtyeight:
+    collector_name: "fivethirtyeight_collector"
+    current_schema_version: "1.0.0"
+    api:
+      language: "en"
+      rate_limit_delay: 1
+      recursive_limit: 1
+    importer:
+      batch_size: 2000
+
+# Default overrides
 wikipedia:
   api:
     language: ["en", "fr"]
-    rate_limit_delay: 0.5
+    rate_limit_delay: 1.0
     max_retries: 5
     search_max_results: 10
     request_timeout: 10
+
+fivethirtyeight:
+  api:
+    rate_limit_delay: 0.05
