@@ -9,40 +9,36 @@ from typing import Any, Dict, List, Optional
 from epochai.common.config.config_loader import ConfigLoader
 from epochai.common.database.dao.validation_statuses_dao import ValidationStatusesDAO
 from epochai.common.logging_config import get_logger, setup_logging
+from epochai.common.utils.decorators import handle_generic_errors_gracefully, handle_initialization_errors
 
 
 class CleanerNotFoundError(Exception):
     pass
 
 
-class Cleaner:
+class CleanerCLI:
     """Cleaning orchestrator and CLI"""
 
+    @handle_initialization_errors(f"{__name__} Initialization")
     def __init__(self):
-        log_config = ConfigLoader.get_logging_config()
-        setup_logging(
-            log_level=log_config["level"],
-            log_to_file=log_config["log_to_file"],
-            log_dir=log_config["log_directory"],
-        )
-
         self.logger = get_logger(__name__)
 
         self.available_cleaners = self._get_available_cleaners()
-
         self.validation_statuses_dao = ValidationStatusesDAO()
         self.validation_status_names = self._get_all_validation_statuses()
 
-        # CONVENIENCE VAR FOR IDE AUTOCOMPLETE SUPPORT - DO NOT USE IN PROD
-        # force_log = self.logger.info("Using convenience var for IDE support")
-        # if force_log: """This line should never execute"""
-        #    from epochai.data_processing.cleaning.wikipedia_cleaner import WikipediaCleaner
-        #    self.convenience_available_cleaners= {
-        #        "wikipedia": WikipediaCleaner,
-        #    }
+        self.cleaning_actions_list = {
+            "clean": self.clean,
+            "clean-by-status": self.clean_by_status,
+            "clean-recent": self.clean_recent,
+            "stats": self.get_statistics,
+            "schema-info": self.get_schema_info,
+            "reload-schema": self.reload_schema,
+        }
 
         self.logger.info("Cleaning Orchestrator and CLI Initialized")
 
+    @handle_generic_errors_gracefully("while getting validation status names", [])
     def _get_all_validation_statuses(self) -> List[str]:
         """Convenience method to get all validation statuses directly from DAO"""
         validation_status_names = self.validation_statuses_dao.get_all()
@@ -52,12 +48,13 @@ class Cleaner:
         self.logger.error("Error getting validation status names")
         return []
 
+    @handle_generic_errors_gracefully("while getting available cleaners", {})
     def _get_available_cleaners(self) -> Dict[str, Any]:
         """Gets cleaner names without suffix mapped to Class"""
         available_cleaners = {}
 
         current_dir = Path(__file__).parent
-        cleaners_dir = current_dir / "cleaning"
+        cleaners_dir = current_dir / "cleaners"
 
         if not cleaners_dir.exists():
             self.logger.warning(f"Cleaners directory not found: {cleaners_dir}")
@@ -67,7 +64,7 @@ class Cleaner:
             module_name = file_path.stem
 
             try:
-                full_module_name = f"epochai.data_processing.cleaning.{module_name}"
+                full_module_name = f"epochai.data_processing.cleaners.{module_name}"
                 module = importlib.import_module(full_module_name)
 
                 for class_name, class_obj in inspect.getmembers(module, inspect.isclass):
@@ -87,10 +84,8 @@ class Cleaner:
 
         return available_cleaners
 
-    def _get_id_range(
-        self,
-        raw_data_id_input: str,
-    ) -> List[int]:
+    @handle_generic_errors_gracefully("while getting ID range", [])
+    def get_id_range(self, raw_data_id_input: str) -> List[int]:
         """
         Gets inputed id ranges
 
@@ -139,132 +134,76 @@ class Cleaner:
 
         return id_list
 
-    def _get_cleaner(
-        self,
-        cleaner_type: str,
-    ):
+    @handle_generic_errors_gracefully("while getting cleaner instance", None)
+    def _get_cleaner_instance(self, cleaner_name: str):
         """Gets a cleaner instance by its name"""
-        if cleaner_type not in self.available_cleaners:
+        if cleaner_name not in self.available_cleaners:
             raise CleanerNotFoundError(
-                f"Unkown cleaner type: {cleaner_type}"
-                f"Available cleaners: {', '.join(self.available_cleaners.keys())}",
+                f"Unknown cleaner type: {cleaner_name}. " f"Available cleaners: {', '.join(self.available_cleaners.keys())}",
             )
-        try:
-            return self.available_cleaners[cleaner_type]()
-        except Exception as e:
-            self.logger.error(f"Failed to initialize {cleaner_type} cleaner: {e}")
-            return None
+        return self.available_cleaners[cleaner_name]()
 
+    @handle_generic_errors_gracefully("while cleaning data", {"success": False, "error": "Cleaning failed"})
     def clean(
         self,
-        cleaner_type: str,
-        raw_data_id_input: str,
+        cleaner: Any,
+        cleaner_name: str,
+        raw_data_ids: Optional[List[int]] = None,
     ) -> Dict[str, Any]:
-        """Cleans multiple raw data records"""
-        if len(raw_data_id_input) < 1:
-            self.logger.error("Error, no id's were inserted")
-            return {"success": False, "error": "No id's inserted"}
+        """Clean specific raw data IDs"""
+        if not raw_data_ids:
+            return {"success": False, "error": "No raw data IDs provided"}
 
-        id_list = self._get_id_range(raw_data_id_input) if len(raw_data_id_input) > 0 else None
-        if not id_list:
-            return {"success": False, "error": "No valid ids found"}
+        self.logger.info(f"Cleaning {len(raw_data_ids)} records with {cleaner_name} cleaner")
 
-        self.logger.info(f"Cleaning {len(id_list)} records with {cleaner_type} cleaner")
+        results = cleaner.clean_multiple_records(raw_data_ids)
+        self.logger.info(
+            f"Batch cleaning completed: {results['success_count']} successful, {results['error_count']} failed",
+        )
+        return results
 
-        cleaner = self._get_cleaner(cleaner_type)
-        if not cleaner:
-            return {"success": False, "error": "Failed to initialize cleaner"}
-
-        try:
-            results: Dict[str, Any] = cleaner.clean_multiple_records(id_list)
-            self.logger.info(
-                f"Batch cleaning completed: {results['success_count']} successful, {results['error_count']} failed",
-            )
-            return results
-        except Exception as general_error:
-            self.logger.error(f"Error in batch cleaning: {general_error}")
-            return {"success": False, "error": f"{general_error!s}"}
-
+    @handle_generic_errors_gracefully("while cleaning by status", {"success": False, "error": "Status cleaning failed"})
     def clean_by_status(
         self,
-        cleaner_type: str,
+        cleaner: Any,
+        cleaner_name: str,
         validation_status: str,
     ) -> Dict[str, Any]:
-        """Cleans all records with a specific validation status"""
-
+        """Clean all records with a specific validation status"""
         self.logger.info(
-            f"Cleaning records with validation status '{validation_status}' using {cleaner_type} cleaner",
+            f"Cleaning records with validation status '{validation_status}' using {cleaner_name} cleaner",
         )
 
-        cleaner = self._get_cleaner(cleaner_type)
-        if not cleaner:
-            return {"success": False, "error": "Failed to initialize cleaner"}
+        results = cleaner.clean_by_validation_status(validation_status)
+        self.logger.info(
+            f"Status based cleaning completed: {results['success_count']} successful, {results['error_count']} failed",
+        )
+        return results
 
-        try:
-            results: Dict[str, Any] = cleaner.clean_by_validation_status(validation_status)
-            self.logger.info(
-                f"Status based cleaning completed: {results['success_count']} successful, {results['error_count']}",
-            )
-            return results
-        except Exception as general_error:
-            self.logger.error(f"Error in status-based cleaning: {general_error}")
-            return {"success": False, "error": str(general_error)}
-
+    @handle_generic_errors_gracefully("while cleaning recent data", {"success": False, "error": "Recent cleaning failed"})
     def clean_recent(
         self,
-        cleaner_type: str,
+        cleaner: Any,
+        cleaner_name: str,
         hours: int,
     ) -> Dict[str, Any]:
-        """Cleans records in the last X hours"""
+        """Clean records in the last X hours"""
+        self.logger.info(f"Cleaning records from the last {hours} hours using {cleaner_name} cleaner")
 
-        self.logger.info(f"Cleaning records from the last {hours} hours using {cleaner_type} cleaner")
+        results = cleaner.clean_recent_data(hours)
+        self.logger.info(
+            f"Recent data cleaning completed: {results['success_count']} successful, {results['error_count']} failed",
+        )
+        return results
 
-        cleaner = self._get_cleaner(cleaner_type)
-        if not cleaner:
-            return {"success": False, "error": "Failed to initialize cleaner"}
-
-        try:
-            results: Dict[str, Any] = cleaner.clean_recent_data(hours)
-            self.logger.info(
-                f"Recent data cleaning completed: {results['success_count']} successful, {results['error_count']} failed",
-            )
-            return results
-        except Exception as general_error:
-            self.logger.error(f"Error cleaning recent data: {general_error}")
-            return {"success": False, "error": str(general_error)}
-
-    def clean_wikipedia_batch(
-        self,
-        limit: Optional[int] = None,
-    ) -> Dict[str, Any]:
-        """Cleans wikipedia data with 'valid' status with optional limit"""
-        self.logger.info(f"Running wikipedia batch cleaning (limited to {limit})")
-
-        cleaner_type = next(iter(self.available_cleaners.keys()))
-        cleaner = self._get_cleaner(cleaner_type)
-        if not cleaner:
-            return {"success": False, "error": "Failed to initialize cleaner"}
-
-        try:
-            results: Dict[str, Any] = cleaner.clean_wikipedia_batch(limit)
-            self.logger.info(
-                f"Wikipedia batch cleaning completed: {results['success_count']} successful, {results['error_count']} failed",
-            )
-            return results
-        except Exception as general_error:
-            self.logger.error(f"Error cleaning recent data: {general_error}")
-            return {"success": False, "error": str(general_error)}
-
+    @handle_generic_errors_gracefully("while getting statistics", {"success": False, "error": "Stats failed"})
     def get_statistics(
         self,
-        cleaner_type: str,
+        cleaner: Any,
+        cleaner_name: str,
     ) -> Dict[str, Any]:
-        """Gets cleaning stats for a cleaner"""
-        self.logger.info(f"Getting statistics for {cleaner_type} cleaner")
-
-        cleaner = self._get_cleaner(cleaner_type)
-        if not cleaner:
-            return {"success": False, "error": "Failed to initialize cleaner"}
+        """Get cleaning stats for a cleaner"""
+        self.logger.info(f"Getting statistics for {cleaner_name} cleaner")
 
         try:
             stats = cleaner.get_cleaning_statistics()
@@ -273,17 +212,14 @@ class Cleaner:
             self.logger.error(f"Error getting statistics: {general_error}")
             return {"success": False, "error": str(general_error)}
 
+    @handle_generic_errors_gracefully("while getting schema info", {"success": False, "error": "Schema info failed"})
     def get_schema_info(
         self,
-        cleaner_type: str,
+        cleaner: Any,
+        cleaner_name: str,
     ) -> Dict[str, Any]:
-        """Gets schema info for a cleaner"""
-
-        self.logger.info(f"Getting schema info for {cleaner_type} cleaner")
-
-        cleaner = self._get_cleaner(cleaner_type)
-        if not cleaner:
-            return {"success": False, "error": "Failed to initialize cleaner"}
+        """Get schema info for a cleaner"""
+        self.logger.info(f"Getting schema info for {cleaner_name} cleaner")
 
         try:
             schema_info = cleaner.get_schema_info()
@@ -292,69 +228,106 @@ class Cleaner:
             self.logger.error(f"Error getting schema info: {general_error}")
             return {"success": False, "error": str(general_error)}
 
+    @handle_generic_errors_gracefully("while reloading schema", {"success": False, "message": "Schema reload failed"})
     def reload_schema(
         self,
-        cleaner_type: str,
-    ) -> bool:
-        """Reloads schema from database for a cleaner"""
-
-        self.logger.info(f"Reloading schema for {cleaner_type} cleaner")
-
-        cleaner = self._get_cleaner(cleaner_type)
-        if not cleaner:
-            return False
+        cleaner: Any,
+        cleaner_name: str,
+    ) -> Dict[str, Any]:
+        """Reload schema from database for a cleaner"""
+        self.logger.info(f"Reloading schema for {cleaner_name} cleaner")
 
         try:
-            success: bool = cleaner.reload_schema_from_database()
-            if success:
-                self.logger.info("Schema reloaded successfully")
-            else:
-                self.logger.warning("Schema reload completed but no changes detected")
-            return success
+            success = cleaner.reload_schema_from_database()
+            message = "Schema reloaded successfully" if success else "No schema changes detected"
+            self.logger.info(message)
+            return {"success": success, "message": message}
         except Exception as general_error:
             self.logger.error(f"Error reloading schema: {general_error}")
-            return False
+            return {"success": False, "message": str(general_error)}
+
+    @handle_generic_errors_gracefully("while executing cleaning operation", {"success": False, "error": "Execution failed"})
+    def execute_cleaning(
+        self,
+        action: str,
+        cleaner_name: str,
+        raw_data_ids: Optional[List[int]] = None,
+        validation_status: Optional[str] = None,
+        hours: Optional[int] = None,
+        dry_run: bool = False,
+    ) -> Dict[str, Any]:
+        """Execute a cleaning operation"""
+        if action not in self.cleaning_actions_list:
+            raise ValueError(f"Unknown action: {action}. Available actions: {', '.join(self.cleaning_actions_list.keys())}")
+
+        if dry_run:
+            return {
+                "success": True,
+                "message": f"DRY RUN: Would execute {action} with {cleaner_name} cleaner",
+                "available_cleaners": list(self.available_cleaners.keys()),
+                "available_actions": list(self.cleaning_actions_list.keys()),
+            }
+
+        cleaner = self._get_cleaner_instance(cleaner_name)
+        if not cleaner:
+            return {"success": False, "error": f"Failed to initialize {cleaner_name} cleaner"}
+
+        # Prepare arguments based on action type
+        action_kwargs = {
+            "cleaner": cleaner,
+            "cleaner_name": cleaner_name,
+        }
+
+        if action == "clean" and raw_data_ids:
+            action_kwargs["raw_data_ids"] = raw_data_ids
+        elif action == "clean-by-status" and validation_status:
+            action_kwargs["validation_status"] = validation_status
+        elif action == "clean-recent" and hours:
+            action_kwargs["hours"] = hours
+
+        return self.cleaning_actions_list[action](**action_kwargs)
 
     def list_all_cleaners(self) -> None:
-        """Lists all available cleaners"""
+        """List all available cleaners"""
         print("Available cleaners:")
         for cleaner_name in self.available_cleaners:
-            print(f"'{cleaner_name}'")
+            print(f"  {cleaner_name}")
 
 
 def setup_args(
     available_cleaners_keys: List[str],
     validation_status_names: List[str],
+    cleaning_actions_list: List[str],
 ) -> argparse.ArgumentParser:
     """Sets up CLI args"""
     parser = argparse.ArgumentParser(
         description="EpochAI Data Cleaning CLI",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-        FYI - wikipedia used as example below, replace wikipedia with relevant cleaner name
-        # Clean by id
-        python cleaner.py clean-by-id wikipedia 123
+        epilog=f"""
+        Examples:
+            cleaning_actions: {', '.join(cleaning_actions_list)}
+            available_cleaners: {', '.join(available_cleaners_keys)}
 
-        # Clean all valid records
-        python cleaner.py clean-by-status wikipedia valid
+            # Clean specific IDs
+            python cleaner.py clean wikipedia --ids "1,2,3"
 
-        # Clean recent data (last X hours)
-        python cleaner.py clean-recent wikipedia 24
+            # Clean by validation status
+            python cleaner.py clean-by-status wikipedia --status valid
 
-        # Wikipedia batch clean
-        python cleaner.py wikipedia-batch --limit 100
+            # Clean recent data
+            python cleaner.py clean-recent wikipedia --hours 24
 
-        # Get cleaning stats
-        python cleaner.py stats wikipedia
+            # Get statistics
+            python cleaner.py stats wikipedia
 
-        # Get schema information
-        python cleaner.py schema-info wikipedia
+            # Get schema info
+            python cleaner.py schema-info wikipedia
 
-        # Reload schema from database
-        python cleaner.py reload-schema wikipedia
+            # Dry run
+            python cleaner.py clean wikipedia --dry-run
 
-        # List all available cleaners
-        python cleaner.py list-cleaners
+            # List available cleaners
+            python cleaner.py list-cleaners
         """,
     )
 
@@ -379,29 +352,27 @@ def setup_args(
 
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
-    clean_parser = subparsers.add_parser("clean-by-id", help="Cleans a specific ID or an ID range (e.g. '1', '1-3, 5', '1-3, 5-8')")  # fmt: skip
-    clean_parser.add_argument("cleaner_type", choices=available_cleaners_keys, help="Type of cleaner to use")  # fmt: skip
-    clean_parser.add_argument("input_id", type=str, help="Specific ID or range of IDs to clean")  # fmt: skip
+    for action in cleaning_actions_list:
+        if action in ["stats", "schema-info", "reload-schema"]:
+            action_parser = subparsers.add_parser(action, help=f"Get {action.replace('-', ' ')} for a cleaner")
+            action_parser.add_argument("cleaner_name", choices=available_cleaners_keys, help="Type of cleaner to use")
+            action_parser.add_argument("--dry-run", action="store_true", help="Preview what would be done")
+        else:
+            action_parser = subparsers.add_parser(action, help=f"{action.replace('-', ' ').title()} data")
+            action_parser.add_argument("cleaner_name", choices=available_cleaners_keys, help="Type of cleaner to use")
+            action_parser.add_argument("--dry-run", action="store_true", help=f"Preview what would be {action}ed")
 
-    clean_by_status_parser = subparsers.add_parser('clean-by-status', help="Clean all IDs with specific validation status")  # fmt: skip
-    clean_by_status_parser.add_argument("cleaner_type", choices=available_cleaners_keys, help="Type of cleaner to use")  # fmt: skip
-    clean_by_status_parser.add_argument("validation_status", choices=validation_status_names, help="Validation status to filter by")  # fmt: skip
-
-    clean_by_hours_parser = subparsers.add_parser("clean-by-hours", help="Cleans all ID's collected in past X hours")  # fmt: skip
-    clean_by_hours_parser.add_argument("cleaner_type", choices=available_cleaners_keys, help="Type of cleaner to use")  # fmt: skip
-    clean_by_hours_parser.add_argument("hours", type=int, help="Number of hours to look back")
-
-    wiki_batch_parser = subparsers.add_parser("wikipedia-batch", help="Runs Wikipedia batch cleaning")  # fmt: skip
-    wiki_batch_parser.add_argument('--limit', type=int, help='Limit number of records to process')  # fmt: skip
-
-    stats_parser = subparsers.add_parser('stats', help='Gets cleaning statistics for a cleaner')  # fmt: skip
-    stats_parser.add_argument('cleaner_type', choices=available_cleaners_keys, help='Type of cleaner to get stats for')  # fmt: skip
-
-    schema_info_parser = subparsers.add_parser('schema-info', help='Gets schema information for a cleaner')  # fmt: skip
-    schema_info_parser.add_argument('cleaner_type', choices=available_cleaners_keys, help='Type of cleaner to get schema info for')  # fmt: skip
-
-    reload_schema_parser = subparsers.add_parser('reload-schema', help='Reloads schema from database')  # fmt: skip
-    reload_schema_parser.add_argument('cleaner_type', choices=available_cleaners_keys, help='Type of cleaner to reload schema for')  # fmt: skip
+            if action == "clean":
+                action_parser.add_argument("--ids", dest="raw_data_ids", help="Comma-separated list of raw data IDs or ranges")
+            elif action == "clean-by-status":
+                action_parser.add_argument(
+                    "--status",
+                    dest="validation_status",
+                    choices=validation_status_names,
+                    help="Validation status to filter by",
+                )
+            elif action == "clean-recent":
+                action_parser.add_argument("--hours", dest="hours", type=int, help="Number of hours to look back")
 
     subparsers.add_parser("list-cleaners", help="List all available cleaners")
 
@@ -409,17 +380,17 @@ def setup_args(
 
 
 def main():
-    cli = Cleaner()
-
+    cli = CleanerCLI()
     available_cleaner_keys = list(cli.available_cleaners.keys())
+    cleaning_actions_list = list(cli.cleaning_actions_list.keys())
 
-    parser = setup_args(available_cleaner_keys, cli.validation_status_names)
+    parser = setup_args(available_cleaner_keys, cli.validation_status_names, cleaning_actions_list)
+
+    if len(sys.argv) == 1:
+        parser.print_help()
+        return
 
     args = parser.parse_args()
-
-    if not args.command:
-        parser.print_help()
-        sys.exit(1)
 
     log_config = ConfigLoader.get_logging_config()
     setup_logging(
@@ -432,83 +403,73 @@ def main():
     success = True
 
     try:
-        if args.command == "clean-by-id":
-            result = cli.clean(args.cleaner_type, args.input_id)
-            success = (
-                result.get("success_count", 0) > 0
-                if "success_count" in result
-                else result.get("success", False)
+        command = args.command
+
+        if command in cli.cleaning_actions_list:
+            raw_data_ids = None
+            if hasattr(args, "raw_data_ids") and args.raw_data_ids:
+                raw_data_ids = cli.get_id_range(args.raw_data_ids)
+
+            validation_status = getattr(args, "validation_status", None)
+            hours = getattr(args, "hours", None)
+
+            result = cli.execute_cleaning(
+                action=command,
+                cleaner_name=args.cleaner_name,
+                raw_data_ids=raw_data_ids,
+                validation_status=validation_status,
+                hours=hours,
+                dry_run=getattr(args, "dry_run", False),
             )
 
-        elif args.command == "clean-by-status":
-            result = cli.clean_by_status(args.cleaner_type, args.validation_status)
-            success = result.get("success_count", 0) > 0
-
-        elif args.command == "clean-by-hours":
-            result = cli.clean_recent(args.cleaner_type, args.hours)
-            success = result.get("success_count", 0) > 0
-
-        elif args.command == "wikipedia-batch":
-            result = cli.clean_wikipedia_batch(args.limit)
-            success = result.get("success_count", 0) > 0
-
-        elif args.command == "stats":
-            result = cli.get_statistics(args.cleaner_type)
-            success = result.get("success", False)
-
-        elif args.command == "schema-info":
-            result = cli.get_schema_info(args.cleaner_type)
-            success = result.get("success", False)
-
-        elif args.command == "reload-schema":
-            success = cli.reload_schema(args.cleaner_type)
-            result = {
-                "success": success,
-                "message": "Schema reloaded" if success else "No schema changes detected",
-            }
-
-        elif args.command == "list-cleaners":
+        elif command == "list-cleaners":
             cli.list_all_cleaners()
             success = True
 
+        else:
+            parser.print_help()
+            return
+
+        # Handle output
+        if result and args.json_output:
+            print(json.dumps(result, indent=2, default=str))
+        elif result and command != "list-cleaners":
+            if result.get("success"):
+                print("Operation completed successfully!")
+
+                if "statistics" in result:
+                    stats = result["statistics"]
+                    print(f"\tCleaner: {stats.get('cleaner_name')} v{stats.get('cleaner_version')}")
+                    print(f"\tTotal cleaned: {stats.get('total_cleaned', 0)}")
+                    print(f"\tValid: {stats.get('valid_count', 0)}")
+                    print(f"\tInvalid: {stats.get('invalid_count', 0)}")
+                    print(f"\tSuccess rate: {stats.get('success_rate', 0):.1f}%")
+                elif "schema_info" in result:
+                    schema = result["schema_info"]
+                    print(f"\tSchema cached: {schema.get('schema_cached')}")
+                    print(f"\tSchema ID: {schema.get('schema_id')}")
+                    print(f"\tValidator available: {schema.get('validator_available')}")
+                elif "success_count" in result:
+                    print(f"\tSuccessful: {result.get('success_count', 0)}")
+                    print(f"\tFailed: {result.get('error_count', 0)}")
+                    if "total_time_seconds" in result:
+                        print(f"\tTotal time: {result.get('total_time_seconds', 0):.2f}s")
+                        print(f"\tAverage time per record: {result.get('average_time_per_record', 0):.2f}s")
+                elif "message" in result:
+                    print(f"\t{result['message']}")
+            else:
+                print("Operation failed!")
+                if "error" in result:
+                    print(f"Error: {result['error']}")
+                success = False
+
     except KeyboardInterrupt:
-        print("\nOperation cancelled by user")
+        print("Operation cancelled by user")
         sys.exit(130)
 
     except Exception as general_error:
-        logger = get_logger(__name__)
-        logger.error(f"Unexpected error: {general_error}")
-        result = {"success": False, "error": str(general_error)}
+        print(f"Unexpected error: {general_error}")
         success = False
-
-    if result and args.json_output:
-        print(json.dumps(result, indent=2, default=str))
-    elif result and args.command != "list-cleaners":
-        if success:
-            print("\tOperation completed successfully")
-            if "statistics" in result:
-                stats = result["statistics"]
-                print(f"\t\tCleaner: {stats.get('cleaner_name')} v{stats.get('cleaner_version')}")
-                print(f"\t\tTotal cleaned: {stats.get('total_cleaned', 0)}")
-                print(f"\t\tValid: {stats.get('valid_count', 0)}")
-                print(f"\t\tInvalid: {stats.get('invalid_count', 0)}")
-                print(f"\t\tSuccess rate: {stats.get('success_rate', 0):.1f}%")
-            elif "schema_info" in result:
-                schema = result["schema_info"]
-                print(f"\t\tSchema cached: {schema.get('schema_cached')}")
-                print(f"\t\tSchema ID: {schema.get('schema_id')}")
-                print(f"\t\tValidator available: {schema.get('validator_available')}")
-                print(f"\t\tRecords processed: {schema.get('records_processed')}")
-            elif "success_count" in result:
-                print(f"\t\tSuccessful: {result.get('success_count', 0)}")
-                print(f"\t\tFailed: {result.get('error_count', 0)}")
-                if "total_time_seconds" in result:
-                    print(f"\t\tTotal time: {result.get('total_time_seconds', 0):.2f}s")
-                    print(f"\t\tAverage time per record: {result.get('average_time_per_record', 0):.2f}s")
-        else:
-            print("\tOperation failed")
-            if "error" in result:
-                print(f"Error: {result['error']}")
 
     sys.exit(0 if success else 1)
 
