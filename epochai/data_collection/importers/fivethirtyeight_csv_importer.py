@@ -65,7 +65,7 @@ class FiveThirtyEightCSVImporter:
         state = row.get("state", "unknown").replace(" ", "_")
         candidate_name = row.get("candidate_name", "unknown").replace(" ", "_")
 
-        return f"{cycle}_{state}_{candidate_name}_{row_index}"
+        return f"{cycle}_{state}_{candidate_name}_{row_index + 2}"  # Make 1-based and account for header
 
     @handle_generic_errors_gracefully("while inserting batch", 0)
     def _insert_batch(

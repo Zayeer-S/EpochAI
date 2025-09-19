@@ -22,8 +22,8 @@ class CleanedDataDAO:
 
         query = """
             SELECT * FROM cleaned_data
-            WHERE raw_data_id = %s,
-            AND cleaner_used = %s,
+            WHERE raw_data_id = %s
+            AND cleaner_used = %s
             AND cleaner_version = %s
             LIMIT 1
         """
