@@ -5,7 +5,7 @@ import pandas as pd
 
 from epochai.common.config.config_loader import ConfigLoader
 from epochai.common.database.dao.collection_targets_dao import CollectionTargetsDAO
-from epochai.common.enums import CollectionStatusNames
+from epochai.common.enums import CollectionStatusNames, CollectionTypeNames
 from epochai.common.logging_config import get_logger
 from epochai.common.utils.database_utils import DatabaseUtils
 from epochai.common.utils.decorators import handle_generic_errors_gracefully, handle_initialization_errors
@@ -29,18 +29,19 @@ class FiveThirtyEightCSVImporter:
 
         # CONSTANTS
         self.COLLECTOR_NAME = self._yaml_config.get("collector_name")
-        self.COLLECTION_TYPE = "presidential_polling_averages"
+        self._collection_type: str
         self.LANGUAGE_CODE = self._yaml_config.get("api").get("language")
         self.BATCH_SIZE = self._yaml_config.get("importer").get("batch_size")
 
         self._logger.info(f"{__name__} initialized")
 
     @handle_generic_errors_gracefully("while getting project root path", None)
-    def _get_project_root(self) -> Optional[str]:
-        """Gets project root directory"""
+    def _get_dir_name(self) -> Optional[str]:
+        """Gets dir directory"""
         current_dir = os.path.dirname(__file__)
         project_root = os.path.abspath(os.path.join(current_dir, "..", "..", ".."))
-        return project_root
+        dir_name = os.path.join(project_root, "data", "raw", "fivethirtyeight")
+        return dir_name
 
     @handle_generic_errors_gracefully("while reading CSV file", None)
     def _read_csv_file(self, filepath: str) -> Optional[pd.DataFrame]:
@@ -63,7 +64,14 @@ class FiveThirtyEightCSVImporter:
         """Dynamically creates unique collection name for each CSV row"""
         cycle = row.get("cycle", "unknown")
         state = row.get("state", "unknown").replace(" ", "_")
-        candidate_name = row.get("candidate_name", "unknown").replace(" ", "_")
+        candidate_name = row.get("candidate_name", "unknown") or row.get("candidate", "unknown")
+
+        candidate_raw: str
+        for col_name in ["candidate_name", "candidate"]:
+            if col_name in row.index and pd.notna(row.get(col_name)):
+                candidate_raw = row.get(col_name)
+                break
+        candidate_name = str(candidate_raw).replace(" ", "_")
 
         return f"{cycle}_{state}_{candidate_name}_{row_index + 2}"  # Make 1-based and account for header
 
@@ -164,6 +172,7 @@ class FiveThirtyEightCSVImporter:
     @handle_generic_errors_gracefully("while importing CSV data", False)
     def import_csv_to_targets(
         self,
+        collection_type: Optional[str] = None,
         csv_filepath: Optional[str] = None,
         dry_run: bool = False,
     ) -> bool:
@@ -177,20 +186,32 @@ class FiveThirtyEightCSVImporter:
             True if successful and vice versa
         """
 
+        if not collection_type:
+            raise ValueError("Dataset format not specified")
+
+        if collection_type == CollectionTypeNames.POST_2016.value:
+            self._collection_type = CollectionTypeNames.POST_2016.value
+        elif collection_type == CollectionTypeNames.PRE_2016.value:
+            self._collection_type = CollectionTypeNames.PRE_2016.value
+
         if not csv_filepath:
-            project_root = self._get_project_root()
-            if not project_root:
-                self._logger.error(f"Couldn't determine project root directory: {project_root}")
+            csv_dir = self._get_dir_name()
+            if not csv_dir:
                 return False
 
-            csv_filepath = os.path.join(
-                project_root,
-                "data",
-                "raw",
-                "fivethirtyeight_raw",
-                "polls",
-                "pres_pollaverages_1968-2016.csv",
-            )
+            if collection_type == CollectionTypeNames.POST_2016.value:
+                csv_filepath = os.path.join(
+                    csv_dir,
+                    "polls",
+                    "2024-averages",
+                    "presidential_general_averages_2024-09-12_uncorrected.csv",
+                )
+            elif collection_type == CollectionTypeNames.PRE_2016.value:
+                csv_filepath = os.path.join(
+                    csv_dir,
+                    "polls",
+                    "pres_pollaverages_1968-2016.csv",
+                )
 
         self._logger.info(f"Starting CSV import from {csv_filepath}")
 
@@ -200,7 +221,7 @@ class FiveThirtyEightCSVImporter:
 
         collector_name_id, collection_type_id, collection_status_id = self._database_utils.get_name_type_status_ids(
             collector_name=self.COLLECTOR_NAME,
-            collection_type=self.COLLECTION_TYPE,
+            collection_type=self._collection_type,
             collection_status_name=CollectionStatusNames.NOT_COLLECTED.value,
         )
 
@@ -209,7 +230,7 @@ class FiveThirtyEightCSVImporter:
         if dry_run:
             self._logger.info("DRY RUN - Would insert the following:")
             self._logger.info(f"\tCollector: {self.COLLECTOR_NAME} (ID: {collector_name_id})")
-            self._logger.info(f"\tCollection Type: {self.COLLECTION_TYPE} (ID: {collection_type_id})")
+            self._logger.info(f"\tCollection Type: {self._collection_type} (ID: {collection_type_id})")
             self._logger.info(f"\tLanguage: {self.LANGUAGE_CODE}")
             self._logger.info(f"\tTotal records: {len(df)}")
             self._logger.info(f"\tBatch size: {self.BATCH_SIZE}")
@@ -237,7 +258,7 @@ class FiveThirtyEightCSVImporter:
         """Gets statistics about imported FiveThirtyEight data"""
         collector_name_id, collection_type_id, _ = self._database_utils.get_name_type_status_ids(
             collector_name=self.COLLECTOR_NAME,
-            collection_type=self.COLLECTION_TYPE,
+            collection_type=self._collection_type,
         )
 
         if not collector_name_id or not collection_type_id:
@@ -258,5 +279,5 @@ class FiveThirtyEightCSVImporter:
             "total_targets": len(targets),
             "by_status_id": status_counts,
             "collector_name": self.COLLECTOR_NAME,
-            "collection_type": self.COLLECTION_TYPE,
+            "collection_type": self._collection_type,
         }

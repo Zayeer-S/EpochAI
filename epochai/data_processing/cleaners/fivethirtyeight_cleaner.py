@@ -6,6 +6,7 @@ from typing import Any, Dict, List, Optional
 
 from epochai.common.config.config_loader import ConfigLoader
 from epochai.common.database.models import RawData
+from epochai.common.enums import CollectionTypeNames
 from epochai.common.utils.decorators import handle_generic_errors_gracefully, handle_initialization_errors
 from epochai.data_processing.cleaners.base_cleaner import BaseCleaner
 
@@ -20,11 +21,8 @@ class FiveThirtyEightCleaner(BaseCleaner):
             cleaner_version=self.config.get("cleaners").get("fivethirtyeight").get("current_schema_version"),
         )
 
-        # Compile regex patterns for efficient reuse
         self._date_pattern = re.compile(r"^(\d{1,2})/(\d{1,2})/(\d{4})$")
-        self._timestamp_pattern = re.compile(r"^(\d{1,2}):(\d{1,2}):(\d{1,2}) (\d{1,2}) (\w{3}) (\d{4})$")
 
-        # State name normalization mapping
         self._state_mapping = {
             "North Carolina": "North_Carolina",
             "South Carolina": "South_Carolina",
@@ -40,10 +38,10 @@ class FiveThirtyEightCleaner(BaseCleaner):
     @handle_generic_errors_gracefully("while transforming FiveThirtyEight content", {})
     def transform_content(self, raw_data: RawData) -> Dict[str, Any]:
         """
-        Cleans FiveThirtyEight polling data including statistical modeling fields
+        Cleans FiveThirtyEight polling data
 
         Returns:
-            Dict containing cleaned metadata with all statistical fields
+            Dict containing cleaned metadata
         """
         if not raw_data.metadata:
             raise ValueError(f"Raw data ({raw_data.id}) has no metadata to clean")
@@ -51,87 +49,40 @@ class FiveThirtyEightCleaner(BaseCleaner):
         raw_metadata = raw_data.metadata
         cleaned_metadata: Dict[str, Any] = {}
 
-        # Required fields
         cleaned_metadata["cycle"] = self._clean_numeric_field(raw_metadata.get("cycle"))
-        cleaned_metadata["state"] = str(raw_metadata.get("state", "")).strip()
-        cleaned_metadata["candidate_name"] = str(raw_metadata.get("candidate_name", "")).strip()
-        cleaned_metadata["pct_estimate"] = self._validate_percentage(raw_metadata.get("pct_estimate"))
-
-        # Cleaned/normalized fields
         cleaned_metadata["cleaned_state"] = self._normalize_state_name(raw_metadata.get("state"))
         cleaned_metadata["cleaned_candidate_name"] = self._normalize_candidate_name(raw_metadata.get("candidate_name"))
 
-        # Core polling data
-        cleaned_metadata["candidate_id"] = self._clean_numeric_field(raw_metadata.get("candidate_id"))
+        cleaned_metadata["pct_estimate"] = self._validate_percentage(raw_metadata.get("pct_estimate"))
         cleaned_metadata["pct_trend_adjusted"] = self._validate_percentage(raw_metadata.get("pct_trend_adjusted"))
 
-        # Date fields
-        cleaned_metadata["modeldate"] = self._parse_date(raw_metadata.get("modeldate"))
-        cleaned_metadata["election_date"] = self._parse_date(raw_metadata.get("election_date"))
-        cleaned_metadata["last_enddate"] = self._parse_date(raw_metadata.get("last_enddate"))
+        modeldate = self._parse_date(raw_metadata.get("modeldate"))
+        election_date = self._parse_date(raw_metadata.get("election_date"))
 
-        # Calculate days before election
-        if cleaned_metadata.get("modeldate") and cleaned_metadata.get("election_date"):
-            cleaned_metadata["days_before_election"] = self._calculate_days_difference(
-                cleaned_metadata["modeldate"],
-                cleaned_metadata["election_date"],
-            )
+        cleaned_metadata["modeldate"] = modeldate
+        cleaned_metadata["election_date"] = election_date
+
+        if modeldate and election_date:
+            cleaned_metadata["days_before_election"] = self._calculate_days_difference(modeldate, election_date)
         else:
             cleaned_metadata["days_before_election"] = None
 
-        # Statistical modeling fields - these are crucial for Bayesian ML
-        statistical_fields = [
-            "_medpoly2",
-            "trend_medpoly2",
-            "_shortpoly0",
-            "trend_shortpoly0",
-            "sum_weight_medium",
-            "sum_weight_short",
-            "sum_influence",
-            "sum_nat_influence",
-            "_minpoints",
-            "_defaultbasetime",
-            "_numloops",
-            "_state_houseeffects_weight",
-            "_state_trendline_weight",
-            "_out_of_state_house_discount",
-            "_house_effects_multiplier",
-            "_attenuate_endpoints",
-            "_nonlinear_polynomial_degree",
-            "_shortpoly_combpoly_weight",
-            "_nat_shortpoly_combpoly_weight",
-        ]
+        cycle = cleaned_metadata["cycle"]
+        if cycle and cycle <= 2016:
+            cleaned_metadata["dataset_type"] = CollectionTypeNames.PRE_2016.value
+        else:
+            cleaned_metadata["dataset_type"] = CollectionTypeNames.POST_2016.value
 
-        for field in statistical_fields:
-            if field in raw_metadata:
-                if field in ["_attenuate_endpoints"]:  # String field
-                    cleaned_metadata[field] = raw_metadata[field]
-                elif field.startswith("_") and "weight" in field or "discount" in field:  # Proportion fields
-                    cleaned_metadata[field] = self._validate_proportion(raw_metadata[field])
-                elif field in ["_minpoints", "_defaultbasetime", "_numloops", "_nonlinear_polynomial_degree"]:  # Integer fields
-                    cleaned_metadata[field] = self._clean_numeric_field(raw_metadata[field])
-                else:  # Numeric fields (percentages, estimates, etc.)
-                    cleaned_metadata[field] = self._clean_float_field(raw_metadata[field])
-            else:
-                cleaned_metadata[field] = None
-
-        # Date/time related fields
-        cleaned_metadata["election_qdate"] = self._clean_numeric_field(raw_metadata.get("election_qdate"))
-        cleaned_metadata["last_qdate"] = self._clean_numeric_field(raw_metadata.get("last_qdate"))
-        cleaned_metadata["timestamp"] = raw_metadata.get("timestamp")
-        cleaned_metadata["comment"] = raw_metadata.get("comment")
-
-        # Metadata fields
-        cleaned_metadata["language"] = raw_metadata.get("language")
-        cleaned_metadata["collected_at"] = raw_metadata.get("collected_at")
         cleaned_metadata["collection_source"] = raw_metadata.get("collection_source")
-        cleaned_metadata["original_row_index"] = self._clean_numeric_field(raw_metadata.get("original_row_index"))
 
-        # Required cleaning metadata
-        cleaned_metadata["cleaned_at"] = datetime.now().isoformat()
-        cleaned_metadata["cleaning_operations_applied"] = self._get_cleaning_operations_list()
         cleaned_metadata["data_quality_score"] = self._calculate_data_quality_score(cleaned_metadata)
         cleaned_metadata["is_outlier"] = self._detect_outliers(cleaned_metadata)
+
+        if "sum_influence" in raw_metadata:
+            cleaned_metadata["sum_influence"] = self._clean_float_field(raw_metadata.get("sum_influence"))
+
+        cleaned_metadata["cleaned_at"] = datetime.now().isoformat()
+        cleaned_metadata["cleaning_operations_applied"] = self._get_cleaning_operations_list()
 
         return cleaned_metadata
 
@@ -148,10 +99,8 @@ class FiveThirtyEightCleaner(BaseCleaner):
         if not candidate or not isinstance(candidate, str):
             return ""
 
-        # Remove extra whitespace and normalize
         cleaned = re.sub(r"\s+", " ", candidate.strip())
 
-        # Handle common name variations
         name_mappings = {
             "Hillary Rodham Clinton": "Hillary Clinton",
             "Donald J. Trump": "Donald Trump",
@@ -161,25 +110,29 @@ class FiveThirtyEightCleaner(BaseCleaner):
         return name_mappings.get(cleaned, cleaned)
 
     def _parse_date(self, date_str: Any) -> Optional[str]:
-        """Parse date strings into ISO format"""
+        """Parse date strings into ISO format
+
+        Why must the Americans think that months come before dates??"""
+
         if not date_str:
             return None
 
-        if not isinstance(date_str, str):
-            date_str = str(date_str)
+        date_str = str(date_str).strip()
 
-        date_str = date_str.strip()
+        # Handle ISO datetime format
+        if "T" in date_str:
+            date_str = date_str.split("T")[0]  # Take just the date part
 
-        # Try to match MM/DD/YYYY format
-        match = self._date_pattern.match(date_str)
-        if match:
-            month, day, year = match.groups()
-            try:
-                # Return ISO date format
-                return f"{year}-{month.zfill(2)}-{day.zfill(2)}"
-            except ValueError:
-                self.logger.warning(f"Invalid date components: {date_str}")
-                return None
+        # Try ISO format (YYYY-MM-DD)
+        iso_match = re.match(r"^(\d{4})-(\d{1,2})-(\d{1,2})$", date_str)
+        if iso_match:
+            return date_str
+
+        # Try MM/DD/YYYY format
+        mm_dd_yyyy_match = re.match(r"^(\d{1,2})/(\d{1,2})/(\d{4})$", date_str)
+        if mm_dd_yyyy_match:
+            month, day, year = mm_dd_yyyy_match.groups()
+            return f"{year}-{month.zfill(2)}-{day.zfill(2)}"
 
         return None
 
@@ -219,7 +172,7 @@ class FiveThirtyEightCleaner(BaseCleaner):
             return None
 
         try:
-            return int(float(value))  # Handle cases where int is stored as float
+            return int(float(value))
         except (ValueError, TypeError):
             return None
 
@@ -233,73 +186,47 @@ class FiveThirtyEightCleaner(BaseCleaner):
         except (ValueError, TypeError):
             return None
 
-    def _validate_proportion(self, value: Any) -> Optional[float]:
-        """Validate proportion values (0-1)"""
-        if value is None:
-            return None
-
-        try:
-            prop_float = float(value)
-            # Clamp to valid proportion range
-            if prop_float < 0:
-                return 0.0
-            elif prop_float > 1:
-                return 1.0
-            return round(prop_float, 6)
-        except (ValueError, TypeError):
-            return None
-
-    def _handle_null_values(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
-        """Ensure consistent null value handling"""
-        # Fields that should be None when empty/invalid
-        nullable_fields = [
-            "_medpoly2",
-            "trend_medpoly2",
-            "pct_trend_adjusted",
-            "candidate_id",
-            "timestamp",
-            "comment",
-        ]
-
-        for field in nullable_fields:
-            if field in metadata and metadata[field] in ["", "nan", "NaN"]:
-                metadata[field] = None
-
-        return metadata
-
     def _calculate_data_quality_score(self, metadata: Dict[str, Any]) -> float:
-        """Calculate a data quality score from 0-1"""
-        required_fields = ["cycle", "state", "candidate_name", "pct_estimate"]
-        optional_fields = ["modeldate", "candidate_id", "pct_trend_adjusted", "election_date"]
+        """Calculate a data quality score from 0-1 based on ML-relevant fields"""
+        required_fields = ["cycle", "cleaned_state", "cleaned_candidate_name"]
+        important_fields = ["modeldate", "election_date", "days_before_election"]
+        polling_fields = ["pct_estimate", "pct_trend_adjusted"]
 
         score = 0.0
-        max_score = len(required_fields) + len(optional_fields)
+        max_score = 0.0
 
-        # Required fields (higher weight)
         for field in required_fields:
-            if metadata.get(field) is not None:
+            max_score += 1.0
+            if metadata.get(field):
                 score += 1.0
 
-        # Optional fields (lower weight)
-        for field in optional_fields:
+        for field in important_fields:
+            max_score += 0.7
             if metadata.get(field) is not None:
-                score += 0.5
+                score += 0.7
 
-        return min(score / max_score, 1.0)
+        max_score += 0.8
+        if any(metadata.get(field) is not None for field in polling_fields):
+            score += 0.8
+
+        return min(score / max_score, 1.0) if max_score > 0 else 0.0
 
     def _detect_outliers(self, metadata: Dict[str, Any]) -> bool:
-        """Detect potential outlier data points"""
-        pct_estimate = metadata.get("pct_estimate")
+        """Detect potential outlier data points for ML filtering"""
+        for pct_field in ["pct_estimate", "pct_trend_adjusted"]:
+            pct = metadata.get(pct_field)
+            if pct is not None and (pct < 1.0 or pct > 90.0):
+                return True
 
-        if pct_estimate is not None and (pct_estimate < 1.0 or pct_estimate > 90.0):
-            return True
-
-        # Flag very old or future election cycles
         cycle = metadata.get("cycle")
         if cycle is not None:
             current_year = datetime.now().year
             if cycle < 1968 or cycle > current_year + 4:
                 return True
+
+        days_before = metadata.get("days_before_election")
+        if days_before is not None and (days_before < 0 or days_before > 1460):  # More than 4 years
+            return True
 
         return False
 
@@ -311,6 +238,6 @@ class FiveThirtyEightCleaner(BaseCleaner):
             "date_parsing",
             "percentage_validation",
             "data_type_conversion",
-            "null_value_handling",
-            "duplicate_detection",
+            "outlier_detection",
+            "data_quality_scoring",
         ]

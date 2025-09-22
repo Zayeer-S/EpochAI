@@ -2,6 +2,7 @@ import argparse
 import sys
 
 from epochai.common.config.config_loader import ConfigLoader
+from epochai.common.enums import CollectionTypeNames
 from epochai.common.logging_config import get_logger, setup_logging
 from epochai.data_collection.importers.fivethirtyeight_csv_importer import FiveThirtyEightCSVImporter
 
@@ -31,6 +32,12 @@ def main():
     )
 
     parser.add_argument(
+        "--type",
+        choices=[CollectionTypeNames.POST_2016.value, CollectionTypeNames.PRE_2016.value],
+        help="Date range of data collected",
+    )
+
+    parser.add_argument(
         "--log-level",
         choices=["DEBUG", "INFO", "WARNING", "ERROR"],
         default="INFO",
@@ -57,6 +64,7 @@ def main():
             success = importer.import_csv_to_targets(
                 csv_filepath=args.csv_file,
                 dry_run=args.dry_run,
+                collection_type=args.type,
             )
 
             if success:

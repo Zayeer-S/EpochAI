@@ -60,7 +60,7 @@ class CollectionReportsService:
         self,
         collector_name: str,
         collection_status_name: str,
-        unique_types_only: bool,
+        unique_languages_only: bool,
     ) -> List[str]:
         """
         Gets list of either all or unique, collection types by the collector's name and their collection status
@@ -78,8 +78,20 @@ class CollectionReportsService:
         uncollected_targets = self._collection_targets_dao.get_by_collector_name_id(
             collector_name_id=collector_name_id,
             collection_status_id=collection_status_id,
-            unique_languages_only=unique_types_only,
+            unique_languages_only=unique_languages_only,
         )
+
+        seen_types = set()
+        for uncollected in uncollected_targets:
+            collection_type_obj = self._collection_types_dao.get_by_id(uncollected.collection_type_id)
+            name_type = collection_type_obj.collection_type if collection_type_obj else "unknown"
+
+            if unique_languages_only:
+                if name_type not in seen_types:
+                    seen_types.add(name_type)
+                    result.append(name_type)
+            else:
+                result.append(name_type)
 
         for uncollected in uncollected_targets:
             collection_type_obj = self._collection_types_dao.get_by_id(uncollected.collection_type_id)

@@ -69,7 +69,7 @@ class BaseCollector(ABC):
         try:
             return self.reporter.get_collection_type_list(
                 collector_name=collector_name,
-                unique_types_only=True,
+                unique_languages_only=True,
                 collection_status_name=collection_status,
             )
         except Exception as general_error:

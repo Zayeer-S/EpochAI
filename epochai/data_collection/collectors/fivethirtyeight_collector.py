@@ -9,15 +9,16 @@ from epochai.data_collection.savers.fivethirtyeight_saver import FiveThirtyEight
 
 class FiveThirtyEightCollector(BaseCollector):
     @handle_initialization_errors(f"{__name__} Initialization")
-    def __init__(self):
+    def __init__(self, collection_type: str):
         self._yaml_config = ConfigLoader.get_collector_yaml_config("fivethirtyeight")
         self._collector_name = self._yaml_config["collector_name"]
         self._collector_version = self._yaml_config["current_schema_version"]
+        self._collection_type = collection_type
 
         super().__init__(
             collector_name=self._collector_name,
             yaml_config=self._yaml_config,
-            utils_class=FiveThirtyEightUtils(self._yaml_config),
+            utils_class=FiveThirtyEightUtils(self._yaml_config, collection_type),
             saver_class=FiveThirtyEightSaver(
                 collector_name=self._collector_name,
                 collector_version=self._collector_version,

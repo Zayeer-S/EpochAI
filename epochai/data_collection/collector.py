@@ -86,7 +86,7 @@ class CollectorCLI:
         try:
             result: List[str] = self.reporter.get_collection_type_list(
                 collector_name=f"{collector_name}_collector",
-                unique_types_only=True,
+                unique_languages_only=False,
                 collection_status_name=CollectionStatusNames.NOT_COLLECTED.value,
             )
             return result
@@ -164,6 +164,7 @@ class CollectorCLI:
     def _get_collector_instance(
         self,
         collector_name: str,
+        collection_type: Optional[List[str]] = None,
     ) -> Optional[BaseCollector]:
         if collector_name not in self.available_collectors:
             raise CollectorNotFoundError(
@@ -171,8 +172,12 @@ class CollectorCLI:
                 f"Available collectors: {', '.join(self.available_collectors.keys())}",
             )
         try:
-            result: BaseCollector = self.available_collectors[collector_name]()
-            return result
+            if collector_name == "fivethirtyeight":
+                if not collection_type:
+                    raise TypeError("FiveThirtyEight collector requires collection type to be specified")
+                type_param = collection_type[0]
+                return self.available_collectors[collector_name](type_param)
+            return self.available_collectors[collector_name]()
         except Exception as general_error:
             self.logger.error(f"Failed to initalize {collector_name} collector: {general_error}")
             return None
@@ -374,7 +379,7 @@ class CollectorCLI:
             collection_status=collection_status,
         )
 
-        collector = self._get_collector_instance(collector_name)
+        collector = self._get_collector_instance(collector_name, collection_type)
         check_for_errors = self._validate_user_input(
             collector=collector,
             collector_name=collector_name,
