@@ -7,6 +7,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 import pandas as pd
 
+from epochai.common.enums import CollectionTypeNames
 from epochai.common.logging_config import get_logger
 from epochai.common.utils.decorators import handle_generic_errors_gracefully, handle_initialization_errors
 
@@ -15,9 +16,10 @@ class FiveThirtyEightUtils:
     """Utility class for FiveThirtyEight polling data operations"""
 
     @handle_initialization_errors(f"{__name__} Initialization")
-    def __init__(self, yaml_config: Dict[str, Any]):
+    def __init__(self, yaml_config: Dict[str, Any], collection_type: str):
         self._logger = get_logger(__name__)
         self._yaml_config = yaml_config
+        self._collection_type = collection_type
 
         self._rate_limit_delay = self._yaml_config["api"]["rate_limit_delay"]
 
@@ -55,14 +57,25 @@ class FiveThirtyEightUtils:
             self._logger.error("Could not determine project root directory")
             return False
 
-        csv_path = os.path.join(
-            project_root,
-            "data",
-            "raw",
-            "fivethirtyeight_raw",
-            "polls",
-            "pres_pollaverages_1968-2016.csv",
-        )
+        if self._collection_type == CollectionTypeNames.POST_2016.value:
+            csv_path = os.path.join(
+                project_root,
+                "data",
+                "raw",
+                "fivethirtyeight",
+                "polls",
+                "2024-averages",
+                "presidential_general_averages_2024-09-12_uncorrected.csv",
+            )
+        elif self._collection_type == CollectionTypeNames.PRE_2016.value:
+            csv_path = os.path.join(
+                project_root,
+                "data",
+                "raw",
+                "fivethirtyeight",
+                "polls",
+                "pres_pollaverages_1968-2016.csv",
+            )
 
         if not os.path.exists(csv_path):
             self._logger.error(f"CSV file not found at: {csv_path}")
@@ -108,7 +121,7 @@ class FiveThirtyEightUtils:
 
         try:
             collection_row_id = int(row_id)
-            pandas_index = collection_row_id - 2  # Adjust for header and 0-based indexing
+            pandas_index = collection_row_id - 2
 
             if pandas_index < 0 or pandas_index >= len(self._csv_data):
                 self._logger.error(f"Row index {pandas_index} out of bounds (0-{len(self._csv_data)-1})")
@@ -116,18 +129,32 @@ class FiveThirtyEightUtils:
 
             row = self._csv_data.iloc[pandas_index]
 
-            # Normalize the CSV data for comparison
             cycle = str(row.get("cycle", "Unknown"))
             state = str(row.get("state", "Unknown")).replace(" ", "_")
-            candidate = str(row.get("candidate_name", "Unknown")).replace(" ", "_")
+            candidate_raw = None
+            for col_name in ["candidate_name", "candidate"]:
+                if col_name in row.index and pd.notna(row.get(col_name)):
+                    candidate_raw = row.get(col_name)
+                    break
+            candidate = str(candidate_raw or "Unknown").replace(" ", "_")
 
-            # Extract all available CSV columns for metadata
             metadata = {}
             for column in self._csv_data.columns:
                 value = row.get(column)
                 metadata[column] = self._convert_numpy_types(value)
 
-            # Add collection-specific metadata
+            if "candidate" in metadata and "candidate_name" not in metadata:
+                metadata["candidate_name"] = metadata["candidate"]
+
+            if "date" in metadata:
+                metadata["modeldate"] = metadata["date"]
+                if not metadata.get("election_date") and metadata.get("cycle"):
+                    cycle = metadata["cycle"]
+                    if cycle == "2020":
+                        metadata["election_date"] = "11/3/2020"
+                    elif cycle == "2024":
+                        metadata["election_date"] = "11/5/2024"
+
             metadata.update(
                 {
                     "language": "en",
@@ -174,11 +201,9 @@ class FiveThirtyEightUtils:
 
             for collection_name, collection_target_id in items_dict.items():
                 try:
-                    # Apply rate limiting
                     if self._rate_limit_delay > 0:
                         time.sleep(self._rate_limit_delay)
 
-                    # Call the callback function
                     result = callback_function(collection_name, language_code, collection_target_id)
                     results.append(result)
 

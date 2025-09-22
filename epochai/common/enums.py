@@ -36,3 +36,8 @@ class ValidationStatusNames(Enum):
     PENDING = "pending"
     WARNING = "warning"
     SKIPPED = "skipped"
+
+
+class CollectionTypeNames(Enum):
+    POST_2016 = "2020-2024"
+    PRE_2016 = "1968-2016"
