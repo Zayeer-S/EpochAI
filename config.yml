@@ -31,7 +31,7 @@ data_settings:
       current_schema_version: "1.0.0"
     fivethirtyeight:
       cleaner_name: "fivethirtyeight_cleaner"
-      current_schema_version: "1.0.0"
+      current_schema_version: "2.0.0"
 
 # Default setup for collectors
 defaults:
