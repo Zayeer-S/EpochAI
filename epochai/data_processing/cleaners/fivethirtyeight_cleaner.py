@@ -59,13 +59,16 @@ class FiveThirtyEightCleaner(BaseCleaner):
         modeldate = self._parse_date(raw_metadata.get("modeldate"))
         election_date = self._parse_date(raw_metadata.get("election_date"))
 
-        cleaned_metadata["modeldate"] = modeldate
-        cleaned_metadata["election_date"] = election_date
+        if self.cleaner_version >= "2.0.0":
+            cleaned_metadata["model_date"] = modeldate
+        elif self.cleaner_version == "1.0.0":
+            cleaned_metadata["modeldate"] = modeldate
+            cleaned_metadata["election_date"] = election_date
 
-        if modeldate and election_date:
-            cleaned_metadata["days_before_election"] = self._calculate_days_difference(modeldate, election_date)
-        else:
-            cleaned_metadata["days_before_election"] = None
+            if modeldate and election_date:
+                cleaned_metadata["days_before_election"] = self._calculate_days_difference(modeldate, election_date)
+            else:
+                cleaned_metadata["days_before_election"] = None
 
         cycle = cleaned_metadata["cycle"]
         if cycle and cycle <= 2016:
@@ -189,7 +192,7 @@ class FiveThirtyEightCleaner(BaseCleaner):
     def _calculate_data_quality_score(self, metadata: Dict[str, Any]) -> float:
         """Calculate a data quality score from 0-1 based on ML-relevant fields"""
         required_fields = ["cycle", "cleaned_state", "cleaned_candidate_name"]
-        important_fields = ["modeldate", "election_date", "days_before_election"]
+        important_fields = ["model_date", "modeldate"]
         polling_fields = ["pct_estimate", "pct_trend_adjusted"]
 
         score = 0.0
@@ -200,10 +203,9 @@ class FiveThirtyEightCleaner(BaseCleaner):
             if metadata.get(field):
                 score += 1.0
 
-        for field in important_fields:
-            max_score += 0.7
-            if metadata.get(field) is not None:
-                score += 0.7
+        max_score += 0.7
+        if any(metadata.get(field) is not None for field in important_fields):
+            score += 0.7
 
         max_score += 0.8
         if any(metadata.get(field) is not None for field in polling_fields):
