@@ -23,8 +23,6 @@ class SchemaUtils:
 
         # GET CONFIG VALUESs
         self._schema_config = ConfigLoader.get_metadata_schema_config()
-        self._schema_cache_limit = int(self._schema_config.get("schema_cache_limit"))
-        self._schema_check_interval = int(self._schema_config.get("schema_check_interval"))
 
         # SET PARAMETERS TO INSTANCE VARS
         self._name = name

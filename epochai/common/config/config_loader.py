@@ -23,7 +23,7 @@ class ConfigLoader:
         return config_path
 
     @staticmethod
-    def load_the_config() -> Dict[str, Any]:
+    def _load_the_config() -> Dict[str, Any]:
         """
         Loads the config from config.yaml
 
@@ -39,7 +39,7 @@ class ConfigLoader:
             if config is None:
                 raise ValueError(f"Config file returning as None: {config}")
 
-            ConfigLoader.validate_whole_config(config)
+            ConfigLoader._validate_whole_config(config)
 
             return config
 
@@ -55,7 +55,7 @@ class ConfigLoader:
             raise ValueError(f"UTF-8 encoding error in {config_path}: {unicode_error}") from unicode_error
 
     @staticmethod
-    def validate_whole_config(
+    def _validate_whole_config(
         config: Dict[str, Any],
     ) -> Dict[str, Any]:
         """
@@ -64,17 +64,68 @@ class ConfigLoader:
         Returns:
             The config (dict) originally sent to this
         """
-        merged_wikipedia_config = ConfigLoader.get_merged_config(config, "wikipedia")
+        merged_wikipedia_config = ConfigLoader._get_merged_config(config, "wikipedia")
+        merged_fivethirtyeight_config = ConfigLoader._get_merged_config(config, "fivethirtyeight")
 
         config_parts_to_validate = {
             "data_settings": config.get("data_settings"),
             "logging": config.get("logging"),
             "wikipedia": merged_wikipedia_config,
+            "fivethirtyeight": merged_fivethirtyeight_config,
+            "defaults": config.get("defaults"),
         }
 
         ValidateWholeConfig.validate_config(config_parts_to_validate)
 
         return config
+
+    @staticmethod
+    def _get_merged_config(
+        config: Dict[str, Any],
+        config_name: str,
+    ) -> Dict[str, Any]:
+        """
+        Takes the default config and the override config and merges them via a helper function
+
+        Returns:
+            Merged config (default config settings overriden by override config)
+        """
+        all_defaults = config.get("defaults")
+        if all_defaults is None:
+            raise ValueError("No 'defaults' section found in config for any collector")
+
+        relevant_default = all_defaults.get(config_name)
+        if relevant_default is None:
+            raise ValueError(f"No 'defaults' section found in config for {config_name}")
+
+        main_config = config.get(config_name)
+        if main_config is None:
+            raise ValueError(f"No '{config_name}' section found in config")
+
+        merged_config = ConfigLoader._override_default_config_values(relevant_default, main_config)
+        return merged_config
+
+    @staticmethod
+    def _override_default_config_values(
+        defaults: Dict[str, Any],
+        overrides: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Recursively merges two dictionaries (default and specific) from config.yml"""
+        result: Dict[str, Any]
+
+        # mypy thinks this is unreachable so tell it to ignore
+        if not isinstance(defaults, dict) or not isinstance(overrides, dict):
+            return overrides  # type: ignore[unreachable]
+
+        result = defaults.copy()
+
+        for key, value in overrides.items():
+            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+                result[key] = ConfigLoader._override_default_config_values(result[key], value)
+            else:
+                result[key] = value
+
+        return result
 
     @staticmethod
     def load_constraints_config() -> Dict[str, Any]:
@@ -98,82 +149,40 @@ class ConfigLoader:
             raise ValueError(f"Error in parsing config.yml: {yaml_error}") from yaml_error
 
     @staticmethod
-    def get_merged_config(
-        config: Dict[str, Any],
-        config_name: str,
-    ) -> Dict[str, Any]:
-        """
-        Takes the default config and the override config and merges them via a helper function
-
-        Returns:
-            Merged config (default config settings overriden by override config)
-        """
-        all_defaults = config.get("defaults")
-        if all_defaults is None:
-            raise ValueError("No 'defaults' section found in config for any collector")
-
-        relevant_default = all_defaults.get(config_name)
-        if relevant_default is None:
-            raise ValueError(f"No 'defaults' section found in config for {config_name}")
-
-        main_config = config.get(config_name)
-        if main_config is None:
-            raise ValueError(f"No '{config_name}' section found in config")
-
-        merged_config = ConfigLoader.override_default_config_values(relevant_default, main_config)
-        return merged_config
-
-    @staticmethod
-    def override_default_config_values(
-        defaults: Dict[str, Any],
-        overrides: Dict[str, Any],
-    ) -> Dict[str, Any]:
-        """Recursively merges two dictionaries (default and specific) from config.yml"""
-        result: Dict[str, Any]
-
-        # mypy thinks this is unreachable so tell it to ignore
-        if not isinstance(defaults, dict) or not isinstance(overrides, dict):
-            return overrides  # type: ignore[unreachable]
-
-        result = defaults.copy()
-
-        for key, value in overrides.items():
-            if key in result and isinstance(result[key], dict) and isinstance(value, dict):
-                result[key] = ConfigLoader.override_default_config_values(result[key], value)
-            else:
-                result[key] = value
-
-        return result
-
-    @staticmethod
     def get_data_config() -> Dict[str, Any]:
         """Gets just the YAML data_settings portion of the config"""
-        whole_config = ConfigLoader.load_the_config()
+        whole_config = ConfigLoader._load_the_config()
 
         data_settings_config: Dict[str, Any] = whole_config.get("data_settings", {})
 
         return data_settings_config
 
     @staticmethod
-    def get_wikipedia_yaml_config() -> Dict[str, Any]:
-        """Gets Wikipedia collector (YAML only) configuration with defaults applied and validates it"""
-        config = ConfigLoader.load_the_config()
+    def get_collector_yaml_config(config_name: str) -> Dict[str, Any]:
+        """Gets passed in collector's YAML config validated with defaults applied"""
+        config = ConfigLoader._load_the_config()
 
-        merged_config = ConfigLoader.get_merged_config(config, "wikipedia")
+        merged_config = ConfigLoader._get_merged_config(
+            config=config,
+            config_name=config_name.lower(),
+        )
+
+        if not merged_config:
+            raise ValueError("Error config empty")
 
         return merged_config
 
     @staticmethod
     def get_metadata_schema_config() -> Dict[str, Any]:
         """Gets the YAML metadata_schema portion of the config"""
-        whole_config = ConfigLoader.load_the_config()
+        whole_config = ConfigLoader._load_the_config()
 
         return whole_config.get("metadata_schema")
 
     @staticmethod
     def get_logging_config() -> Dict[str, Any]:
         """Get logging configuration and validate it"""
-        config = ConfigLoader.load_the_config()
+        config = ConfigLoader._load_the_config()
         logging_config: Dict[str, Any] = config.get(
             "logging",
             {

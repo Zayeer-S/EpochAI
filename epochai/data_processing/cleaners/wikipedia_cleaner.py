@@ -1,6 +1,6 @@
 from datetime import datetime
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from epochai.common.config.config_loader import ConfigLoader
 from epochai.common.database.models import RawData
@@ -23,45 +23,6 @@ class WikipediaCleaner(BaseCleaner):
         self._multiple_newlines_pattern = re.compile(r"\n{3,}")
 
         self.logger.info(f"Wikipedia Cleaner Initialized ({self._schema_utils.get_metadata_schema_id()})")
-
-    def transform_content(self, raw_data: RawData) -> Dict[str, Any]:
-        """
-        Cleans Wikipedia Raw Data
-
-        Returns:
-            Dict containing cleaned metadata
-        """
-
-        if not raw_data.metadata:
-            raise ValueError(f"Raw data ({raw_data.id}) has no metadata to clean")
-
-        metadata = raw_data.metadata.copy()
-
-        if "content" in metadata:
-            metadata["cleaned_content"] = self._clean_text_content(metadata["content"])
-            metadata["content_word_count"] = self._count_words(metadata["cleaned_content"])
-            metadata["content_char_count"] = len(metadata["cleaned_content"])
-
-        if "summary" in metadata:
-            metadata["cleaned_summary"] = self._clean_text_content(metadata["summary"])
-            metadata["summary_word_count"] = self._count_words(metadata["cleaned_summary"])
-
-        if "title" in metadata:
-            metadata["cleaned_title"] = self._clean_title(metadata["title"])
-
-        if "categories" in metadata:
-            metadata["cleaned_categories"] = self._clean_categories(metadata["categories"])
-            metadata["category_count"] = len(metadata["cleaned_categories"])
-
-        if "links" in metadata:
-            metadata["cleaned_links"] = self._clean_links(metadata["links"])
-            metadata["internal_link_count"] = len(metadata["cleaned_links"])
-
-        metadata["cleaned_at"] = datetime.now().isoformat()
-        metadata["original_content_length"] = len(metadata.get("content", ""))
-        metadata["cleaning_operations_applied"] = self._get_cleaning_operations_list()
-
-        return metadata
 
     def _clean_text_content(self, text: str) -> str:
         """Cleans and normalizes text content"""
@@ -147,19 +108,41 @@ class WikipediaCleaner(BaseCleaner):
             "content_validation",
         ]
 
-    def clean_wikipedia_batch(self, limit: Optional[int] = None) -> Dict[str, Any]:
-        """Cleans raw wikipedia data with 'valid' status"""
-        self.logger.info("Starting Wikipedia batch cleaning")
+    def transform_content(self, raw_data: RawData) -> Dict[str, Any]:
+        """
+        Cleans Wikipedia Raw Data
 
-        raw_data_records = self.service.raw_data_dao.get_by_validation_status("valid")
+        Returns:
+            Dict containing cleaned metadata
+        """
 
-        if limit is not None and not limit < 0:
-            raw_data_records = raw_data_records[:limit]
-            self.logger.info(f"Limited batch to {limit} records")
+        if not raw_data.metadata:
+            raise ValueError(f"Raw data ({raw_data.id}) has no metadata to clean")
 
-        if not raw_data_records:
-            self.logger.info("No valid raw Wikipedia data found to clean")
-            return {"success_count": 0, "error_count": 0, "cleaned_ids": [], "error_ids": []}
+        metadata = raw_data.metadata.copy()
 
-        raw_data_ids = [record.id for record in raw_data_records if record.id]
-        return self.clean_multiple_records(raw_data_ids)
+        if "content" in metadata:
+            metadata["cleaned_content"] = self._clean_text_content(metadata["content"])
+            metadata["content_word_count"] = self._count_words(metadata["cleaned_content"])
+            metadata["content_char_count"] = len(metadata["cleaned_content"])
+
+        if "summary" in metadata:
+            metadata["cleaned_summary"] = self._clean_text_content(metadata["summary"])
+            metadata["summary_word_count"] = self._count_words(metadata["cleaned_summary"])
+
+        if "title" in metadata:
+            metadata["cleaned_title"] = self._clean_title(metadata["title"])
+
+        if "categories" in metadata:
+            metadata["cleaned_categories"] = self._clean_categories(metadata["categories"])
+            metadata["category_count"] = len(metadata["cleaned_categories"])
+
+        if "links" in metadata:
+            metadata["cleaned_links"] = self._clean_links(metadata["links"])
+            metadata["internal_link_count"] = len(metadata["cleaned_links"])
+
+        metadata["cleaned_at"] = datetime.now().isoformat()
+        metadata["original_content_length"] = len(metadata.get("content", ""))
+        metadata["cleaning_operations_applied"] = self._get_cleaning_operations_list()
+
+        return metadata

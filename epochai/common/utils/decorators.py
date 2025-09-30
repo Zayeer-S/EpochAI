@@ -1,6 +1,7 @@
 # ruff: noqa: E501
 
 from enum import Enum
+import traceback
 from typing import Any, Dict, Tuple
 
 
@@ -62,6 +63,7 @@ def _print_generic_error(
         logger = _get_logger(args)
         if logger:
             logger.error(f"{custom_msg}: {error}")
+            logger.debug(f"\n{traceback.format_exc()}")
         else:
             print(f"No logger found: {custom_msg} - {error}")  # Fallback logging
     elif error_severity == _fail_fast:
