@@ -7,6 +7,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder
 import xgboost as xgb
 
+from epochai.common.config.config_loader import ConfigLoader
 from epochai.common.database.dao.cleaned_data_dao import CleanedDataDAO
 from epochai.common.logging_config import get_logger
 from epochai.common.utils.decorators import handle_generic_errors_gracefully, handle_initialization_errors
@@ -21,9 +22,14 @@ class ElectionNowcaster:
         self._cleaned_data_dao = CleanedDataDAO()
         self._election_year = election_year
 
+        config = ConfigLoader.get_data_config()
+        config = config["cleaners"]["fivethirtyeight"]
+        self._cleaner_name = config["cleaner_name"]
+        self._current_schema_version = config["current_schema_version"]
+
         self._decay_rate = 0.05
 
-        # All electoral votes except D.C.
+        # All electoral votes except D.C. TODO Have multiple years
         self._electoral_votes = {
             "Alabama": 9,
             "Alaska": 3,
@@ -82,6 +88,8 @@ class ElectionNowcaster:
         self._state_encoder = LabelEncoder()
         self._polling_data: Any = None
         self._candidates: Any = None
+        self._current_date: Any = None
+        self._target_column: str = ""
 
         self._logger.info(f"Initialized {__name__} for {election_year}")
 
@@ -90,28 +98,38 @@ class ElectionNowcaster:
         if self._polling_data is None or self._polling_data.empty:
             return {}
 
-        max_days = self._polling_data["days_before_election"].max()
-        min_days = self._polling_data["days_before_election"].min()
+        max_days = self._polling_data["days_since_poll"].max()
+        min_days = self._polling_data["days_since_poll"].min()
 
         return {
             "days_of_data": int(max_days - min_days) if max_days and min_days else 0,
+            "most_recent_poll_days_ago": int(min_days) if min_days else 0,
+            "oldest_poll_days_ago": int(max_days) if max_days else 0,
         }
 
     @handle_generic_errors_gracefully("while loading polling data", pd.DataFrame())
     def load_polling_data(
         self,
         candidates: List[str],
-        states: List[str],
-        days_before_election: int = 365,
+        current_date: str,
+        states: Optional[List[str]] = None,
+        lookback_days: int = 60,
     ) -> pd.DataFrame:
-        """Loads and preprocesses polling data from cleaned_data table"""
+        """Loads and preprocesses polling data from cleaned_data table
+
+        Args:
+            candidates: List of candidate names to filter for
+            current_date: Date for nowcast (ISO format YYYY-MM-DD)
+            states: Optional list of states to filter for
+            lookback_days: How many days of polling data to include before current_date
+        """
 
         if not candidates:
             raise ValueError("No candidates entered")
 
         self._logger.info(f"Loading polling data for {len(candidates)} candidates for {self._election_year} race")
 
-        cleaned_records = self._cleaned_data_dao.get_by_cleaner("fivethirtyeight_cleaner", "1.0.0")
+        cleaned_records = self._cleaned_data_dao.get_by_cleaner(self._cleaner_name, self._current_schema_version)
 
         if not cleaned_records:
             self._logger.error("No cleaned FiveThirtyEight data found")
@@ -131,6 +149,24 @@ class ElectionNowcaster:
         df = df[df["cycle"] == self._election_year]
         df = df[df["cleaned_candidate_name"].isin(candidates)]
 
+        if self._election_year <= 2016:
+            self._target_column = "pct_estimate"
+        else:
+            self._target_column = "pct_trend_adjusted"
+
+        self._logger.info(f"Using {self._target_column} for {self._election_year} election")
+
+        df["model_date"] = pd.to_datetime(df["model_date"], errors="coerce")
+        df = df.dropna(subset=["model_date"])
+
+        current_date_parsed = pd.to_datetime(current_date)
+        self._current_date = current_date_parsed
+
+        df["days_since_poll"] = (current_date_parsed - df["model_date"]).dt.days
+
+        df = df[df["days_since_poll"] >= 0]
+        df = df[df["days_since_poll"] <= lookback_days]
+
         if len(df) > 1000:
             df = df.sample(n=1000, random_state=42).reset_index(drop=True)
             self._logger.info(f"Sampled down to {len(df)} records for performance")
@@ -138,26 +174,32 @@ class ElectionNowcaster:
         if states:
             df = df[df["cleaned_state"].isin(states)]
 
-        df = df[df["days_before_election"] <= days_before_election]
-
         required_cols = [
             "cleaned_state",
             "cleaned_candidate_name",
-            "pct_estimate",
-            "days_before_election",
-            "data_quality_score",
+            self._target_column,
         ]
         df = df.dropna(subset=required_cols)
 
-        df["time_weight"] = np.exp(-self._decay_rate * df["days_before_election"] / 30)  # Weigh recent polls higher
+        df["time_weight"] = np.exp(-self._decay_rate * df["days_since_poll"] / 30)
 
-        base_weight = df["data_quality_score"].fillna(0.5)
-        fte_weight = df["sum_influence"].fillna(1.0)
+        if "data_quality_score" in df.columns:
+            df["data_quality_score"] = df["data_quality_score"].fillna(0.5)
+        else:
+            df["data_quality_score"] = 0.5
+
+        if "sum_influence" in df.columns:
+            df["sum_influence"] = df["sum_influence"].fillna(1.0)
+        else:
+            df["sum_influence"] = 1.0
+
+        base_weight = df["data_quality_score"]
+        fte_weight = df["sum_influence"]
         df["poll_weight"] = base_weight * fte_weight * df["time_weight"]
 
         self._polling_data = df
         self._candidates = list(df["cleaned_candidate_name"].unique())
-        self._logger.info(f"Loaded {len(df)} polling records for modelling")
+        self._logger.info(f"Loaded {len(df)} polling records from {lookback_days} days before {current_date}")
 
         return df
 
@@ -168,30 +210,33 @@ class ElectionNowcaster:
         if df.empty:
             return df
 
-        # Sort by state and days_before_election for rolling calculations
-        df = df.sort_values(["cleaned_state", "cleaned_candidate_name", "days_before_election"])
+        # Sort by state and days_since_poll for rolling calculations
+        df = df.sort_values(["cleaned_state", "cleaned_candidate_name", "days_since_poll"])
 
         feature_df = df.copy()
 
         # Time-based features
-        feature_df["days_before_election_norm"] = feature_df["days_before_election"] / 365
-        feature_df["weeks_before_election"] = feature_df["days_before_election"] / 7
+        feature_df["days_since_poll_norm"] = feature_df["days_since_poll"] / 365
+        feature_df["weeks_since_poll"] = feature_df["days_since_poll"] / 7
 
         # State encoding
         feature_df["state_encoded"] = self._state_encoder.fit_transform(feature_df["cleaned_state"])
 
-        # Rolling averages by candidate and state
+        # Rolling averages by candidate and state using relevant target column
         for window in [7, 14, 30]:
             feature_df[f"poll_avg_{window}d"] = (
-                feature_df.groupby(["cleaned_state", "cleaned_candidate_name"])["pct_estimate"]
+                feature_df.groupby(["cleaned_state", "cleaned_candidate_name"])[self._target_column]
                 .rolling(window=window, min_periods=1)
                 .mean()
                 .reset_index(level=[0, 1], drop=True)
             )
 
         # Poll quality features
-        feature_df["quality_score_norm"] = feature_df["data_quality_score"] / feature_df["data_quality_score"].max()
-        feature_df["influence_norm"] = feature_df["sum_influence"] / feature_df["sum_influence"].max()
+        max_quality = feature_df["data_quality_score"].max()
+        feature_df["quality_score_norm"] = feature_df["data_quality_score"] / max_quality if max_quality > 0 else 0.5
+
+        max_influence = feature_df["sum_influence"].max()
+        feature_df["influence_norm"] = feature_df["sum_influence"] / max_influence if max_influence > 0 else 1.0
 
         # Historical state lean TODO Make dynamic
         safe_dem_states = ["California", "New_York", "Illinois", "Massachusetts", "Washington"]
@@ -213,10 +258,9 @@ class ElectionNowcaster:
         feature_df = self.create_ml_features(df)
         candidates = feature_df["cleaned_candidate_name"].unique()
 
-        # Feature columns for XGBoost
         feature_cols = [
-            "days_before_election_norm",
-            "weeks_before_election",
+            "days_since_poll_norm",
+            "weeks_since_poll",
             "state_encoded",
             "poll_avg_7d",
             "poll_avg_14d",
@@ -231,23 +275,23 @@ class ElectionNowcaster:
         self._xgb_models = {}
         model_scores = {}
 
+        # Filter data for this candidate, determine data sufficiency
+        # Train/test split, evaluation
         for candidate in candidates:
             self._logger.info(f"Training XGBoost model for {candidate}")
 
-            # Filter data for this candidate
             candidate_data = feature_df[feature_df["cleaned_candidate_name"] == candidate].copy()
 
-            if len(candidate_data) < 10:  # Not enough data
+            if len(candidate_data) < 10:
                 self._logger.warning(f"Insufficient data for {candidate}: {len(candidate_data)} rows")
                 continue
 
             X = candidate_data[feature_cols]
-            y = candidate_data["pct_estimate"]
+            y = candidate_data[self._target_column]
 
-            # Train/test split
             if len(X) > 20:
                 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-            else:  # Use all data as too small
+            else:
                 X_train, X_test, y_train, y_test = X, X, y, y
 
             trained_model = xgb.XGBRegressor(
@@ -260,7 +304,6 @@ class ElectionNowcaster:
 
             trained_model.fit(X_train, y_train)
 
-            # Evaluation
             train_score = trained_model.score(X_train, y_train)
             test_score = trained_model.score(X_test, y_test) if len(X_test) > 0 else train_score
 
@@ -278,7 +321,7 @@ class ElectionNowcaster:
     @handle_generic_errors_gracefully("while making XGBoost predictions", {})
     def predict_with_xgb(
         self,
-        states: Optional[List[str]],
+        states: Optional[List[str]] = None,
         shy_voter_adjustment: float = 0.0,
         shy_candidate: str = "",
     ) -> Dict[str, Dict[str, float]]:
@@ -292,7 +335,7 @@ class ElectionNowcaster:
             states = [s for s in states if s != "National"]
 
         # Create prediction features for each state
-        predictions: Dict[Any, Any] = {}
+        predictions: Dict[str, Dict[str, float]] = {}
         for state in states:
             predictions[state] = {}
 
@@ -305,8 +348,8 @@ class ElectionNowcaster:
                 if not state_data.empty:
                     recent_data = state_data[state_data["cleaned_candidate_name"] == candidate]
                     if not recent_data.empty:
-                        recent_avg = recent_data["pct_estimate"].mean()
-                        days_recent = recent_data["days_before_election"].min()
+                        recent_avg = recent_data[self._target_column].mean()
+                        days_recent = recent_data["days_since_poll"].min()
                     else:
                         recent_avg = 45.0  # Default
                         days_recent = 30
@@ -317,8 +360,8 @@ class ElectionNowcaster:
                 # Create feature vector
                 features = pd.DataFrame(
                     {
-                        "days_before_election_norm": [days_recent / 365],
-                        "weeks_before_election": [days_recent / 7],
+                        "days_since_poll_norm": [days_recent / 365],
+                        "weeks_since_poll": [days_recent / 7],
                         "state_encoded": [
                             self._state_encoder.transform([state])[0] if state in self._state_encoder.classes_ else 0,
                         ],
@@ -328,7 +371,7 @@ class ElectionNowcaster:
                         "quality_score_norm": [0.5],
                         "influence_norm": [0.5],
                         "time_weight": [1.0],
-                        "state_lean": [0],  # Could be enhanced with actual state lean data
+                        "state_lean": [0],
                         "is_swing_state": [
                             1 if state in ["Florida", "Pennsylvania", "Michigan", "Wisconsin", "North_Carolina"] else 0,
                         ],
@@ -337,7 +380,7 @@ class ElectionNowcaster:
 
                 # Make prediction
                 pred = model.predict(features)[0]
-                raw_predictions[candidate] = max(0, min(100, pred))  # Clamp to [0, 100]
+                raw_predictions[candidate] = max(0, min(100, pred))
 
             # Apply shy voter adjustment if specified
             adjusted_predictions = raw_predictions.copy()
@@ -387,20 +430,18 @@ class ElectionNowcaster:
         for _i in range(n_simulations):
             ec_votes = np.zeros(len(candidates))
 
+            # Add uncertainty to predictions and add normal noise to uncertainty
+            # Determine winner and add electoral votes
             for state_idx, state in enumerate(states):
-                # Add uncertainty to predictions
                 state_results = []
                 for candidate in candidates:
                     base_pred = state_predictions[state][candidate]
-                    # Add normal noise for uncertainty
                     noisy_pred = np.random.normal(base_pred, uncertainty_std)
                     state_results.append(noisy_pred)
 
-                # Determine winner
                 winner_idx = np.argmax(state_results)
                 state_win_probs[state_idx, winner_idx] += 1
 
-                # Add electoral votes
                 if state in self._electoral_votes:
                     ec_votes[winner_idx] += self._electoral_votes[state]
 
@@ -413,14 +454,14 @@ class ElectionNowcaster:
         election_wins = (ec_results_array >= 270).sum(axis=0)
         win_probabilities = election_wins / n_simulations
 
-        # Normalize win probabilities to sum to 100% (no third party can win)
+        # Normalize win probabilities to sum to 100% (no third party can win) TODO MAKE THIS COUNTRY DETERMINT
         total_win_prob = win_probabilities.sum()
         if total_win_prob > 0:
             win_probabilities = win_probabilities / total_win_prob
 
         expected_ec_votes = ec_results_array.mean(axis=0)
 
-        # Add D.C.'s 3 electoral votes to Democratic candidate (assumed safe)
+        # Add D.C.'s 3 electoral votes to Democratic candidate
         democratic_candidate_idx = None
         for i, candidate in enumerate(candidates):
             if any(dem_name in candidate for dem_name in ["Clinton", "Biden", "Harris", "Obama"]):
@@ -428,9 +469,8 @@ class ElectionNowcaster:
                 break
 
         if democratic_candidate_idx is not None:
-            expected_ec_votes[democratic_candidate_idx] += 3  # Add D.C.'s 3 electoral votes
+            expected_ec_votes[democratic_candidate_idx] += 3
 
-        # Calculate average state-level support as proxy for popular vote
         popular_vote_estimates = []
         for candidate in candidates:
             total_support = sum(state_predictions[state][candidate] for state in states)
@@ -467,8 +507,8 @@ class ElectionNowcaster:
                         dict(
                             zip(
                                 [
-                                    "days_norm",
-                                    "weeks",
+                                    "days_since_poll_norm",
+                                    "weeks_since_poll",
                                     "state",
                                     "avg_7d",
                                     "avg_14d",
@@ -492,6 +532,8 @@ class ElectionNowcaster:
                 "n_polls": len(self._polling_data) if self._polling_data is not None else 0,
                 "n_candidates": len(self._candidates) if self._candidates else 0,
                 "date_range": self._get_date_range() if self._polling_data is not None else None,
+                "nowcast_date": str(self._current_date.date()) if self._current_date else None,
+                "target_column": self._target_column,
             },
         }
 
@@ -501,19 +543,31 @@ class ElectionNowcaster:
     def run_prediction_pipeline(
         self,
         candidates: List[str],
-        states: List[str],
-        days_before_election: int = 365,
+        current_date: str,
+        states: Optional[List[str]] = None,
+        lookback_days: int = 60,
         n_simulations: int = 10000,
         shy_voter_adjustment: float = 0.0,
         shy_candidate: str = "",
         uncertainty_std: float = 2.0,
     ) -> Dict[str, Any]:
-        """Run the complete XGBoost prediction pipeline"""
+        """Run the complete XGBoost prediction pipeline
 
-        self._logger.info("Starting XGBoost prediction pipeline")
+        Args:
+            candidates: List of candidate names
+            current_date: Date for nowcast (ISO format YYYY-MM-DD) - REQUIRED
+            states: Optional list of states to filter
+            lookback_days: How many days of polling data to use
+            n_simulations: Number of Monte Carlo simulations
+            shy_voter_adjustment: Adjustment for shy voter effect
+            shy_candidate: Which candidate gets the shy voter adjustment
+            uncertainty_std: Standard deviation for uncertainty
+        """
+
+        self._logger.info(f"Starting XGBoost prediction pipeline for {self._election_year}")
 
         # Load data
-        df = self.load_polling_data(candidates, states, days_before_election)
+        df = self.load_polling_data(candidates, current_date, states, lookback_days)
         if df.empty:
             return {"error": "No polling data available"}
 
@@ -524,6 +578,7 @@ class ElectionNowcaster:
 
         # Generate XGBoost predictions for all states
         xgb_predictions = self.predict_with_xgb(
+            states=states,
             shy_voter_adjustment=shy_voter_adjustment,
             shy_candidate=shy_candidate,
         )
@@ -545,17 +600,24 @@ class ElectionNowcaster:
 
 def main():
     election_year = 2016
+    candidates = ["Donald Trump", "Hillary Clinton"]
+    current_date = "2016-11-08"
+    lookback_days = 60
+    n_simulations = 1000
     shy_adjustment = 2.0
-    shy_candidate = "Donald Trump"
+    shy_candidate = candidates[0]
+    uncertainty_std = 3.0
 
     predictor = ElectionNowcaster(election_year=election_year)
+
     results = predictor.run_prediction_pipeline(
-        candidates=["Donald Trump", "Hillary Clinton"],
-        days_before_election=60,
-        n_simulations=1000,
+        candidates=candidates,
+        current_date=current_date,
+        lookback_days=lookback_days,
+        n_simulations=n_simulations,
         shy_voter_adjustment=shy_adjustment,
         shy_candidate=shy_candidate,
-        uncertainty_std=2.0,
+        uncertainty_std=uncertainty_std,
     )
 
     if "error" in results:
@@ -567,7 +629,9 @@ def main():
     win_probs = results["win_probabilities"]
     expected_ec = results["expected_electoral_votes"]
 
-    print(f"=== {election_year} Election Prediction ===")
+    print(f"=== {election_year} Election Nowcast ===")
+    print(f"Nowcast Date: {results['model_diagnostics']['data_summary']['nowcast_date']}")
+    print(f"Data Source: {results['model_diagnostics']['data_summary']['target_column']}")
     if shy_adjustment > 0:
         print(f"Shy voter adjustment: +{shy_adjustment} points for {shy_candidate}")
 
@@ -576,11 +640,12 @@ def main():
         print(f"\tWin Probability: {win_probs[i]:.1%}")
         print(f"\tExpected EC Votes: {expected_ec[i]:.1f}")
 
-    # Show total EC votes to verify
     total_ec = sum(expected_ec)
     print(f"\nTotal EC Votes: {total_ec:.1f}")
 
     print(f"\nModel used {results['model_diagnostics']['data_summary']['n_polls']} polls")
+    date_range = results["model_diagnostics"]["data_summary"]["date_range"]
+    print(f"Poll recency: {date_range['most_recent_poll_days_ago']} to {date_range['oldest_poll_days_ago']} days ago")
     print("XGBoost Model Scores:")
     for candidate, scores in results["xgb_model_scores"].items():
         print(f"\t{candidate}: R² = {scores['test_r2']:.3f} ({scores['n_samples']} samples)")
