@@ -16,23 +16,8 @@ EpochAI/
 │   └── workflows/
 │       └── lint.yml                                        # Automated lint and unit tests via github actions
 │
-├── app/                                                    # Web application
-│   ├── __init__.py
-│   ├── app.py                                              # Flask application
-│   ├── routes.py                                           # API endpoints
-│   ├── static/                                             # Static assets
-│   │   ├── css/
-│   │   │   └── styles.css
-│   │   ├── js/
-│   │   │   └── scripts.js
-│   │   └── images/
-│   └── templates/                                          # HTML templates
-│       └── index.html
-│
 ├── data/                                                   # Data directory
 │   ├── raw/                                                # Raw collected data
-│   ├── processed/                                          # Cleaned and processed data
-│   ├── features/                                           # Extracted features
 │   └── models/                                             # Trained models
 │
 ├── docs/                                                   # Documentation
@@ -46,9 +31,6 @@ EpochAI/
 │   │   ├── ERD.drawio.xml                                  # File structure in xml to allow for future editing
 │   ├── ENV_FILE_TEMPLATE.md
 │   └── USER_GUIDE.md
-│
-├── notebooks/                                              # Jupyter notebooks
-│   └── (empty)
 │
 ├── epochai/                                                # Main package directory
 │   ├── __init__.py
@@ -129,12 +111,10 @@ EpochAI/
 │   │       ├── __init__.py
 │   │       ├── base_cleaner.py                             # Abstract base cleaner
 │   │       └── wikipedia_cleaner.py                        # Wikipedia cleaner - inherits base_cleaner
-│   ├── politicsai/                                         # PoliticsAI component
-│   │   ├── __init__.py
-│   ├── stocksai/                                           # StocksAI component
-│   │   ├── __init__.py
-│   └── visualization/                                      # Data visualization
+│   └── politicsai/                                         # PoliticsAI component
 │       ├── __init__.py
+│       └── ml_tools/                                       # ML tools for LLMs
+│           └── election_nowcaster                          # XGBoost election nowcaster model
 │
 └── tests/                                                  # Unit and integration tests
     ├── conftest.py                                         # Tells Pytest where project filepath is
